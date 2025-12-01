@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+dynamic = ["version"]
+name = "spirit-phantom"
+description = "SPIRIT phantom tools"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+authors = [
+  { name = 'Frank Bolton', email = 'frank.bolton@goldstandardphantoms.com' },
+]
+urls = { Homepage = "https://goldstandardphantoms.com" }
+
+
+dependencies = ["numpy>=2.3.5"]
+
+
+[dependency-groups]
+dev = [
+  "pytest~=8.1",
+  "pytest-cov~=4.1",
+  "tox-uv~=1.14",
+  "mkdocs>=1.6.1",
+  "mkdocs-material>=9.5.49",
+  "mkdocstrings[python]>=0.27.0",
+  "markdown-include>=0.8.1",
+  "ruff>=0.14.3",
+  "mypy>=1.18.2",
+]
+
+[project.scripts]
+spirit-phantom = "spirit_phantom:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+
+[tool.setuptools_scm]

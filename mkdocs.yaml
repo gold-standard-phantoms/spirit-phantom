@@ -1,0 +1,50 @@
+site_name: GSP Spirit phantom tools
+site_description: GSP Spirit phantom tools
+repo_url: https://gitlab.com/goldstandardphantoms/spirit-phantom
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - toc.follow
+
+watch:
+  - "docs/"
+  - "src/"
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            docstring_options:
+              ignore_init_summary: false
+
+markdown_extensions:
+  - markdown_include.include:
+      base_path: .
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+
+nav:
+  - README: index.md
+  - API Reference: module.md
+
+
+extra_javascript:
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+
+extra_css:
+  - https://unpkg.com/katex@0/dist/katex.min.css
