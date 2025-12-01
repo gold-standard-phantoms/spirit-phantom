@@ -1,0 +1,15 @@
+name: Test Workflow
+
+on:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  test_job:
+    name: Run Push Tests
+    uses: gold-standard-phantoms/github-actions/.github/workflows/python-test.yml@main
+    with:
+      python_version: "3.11"
+      use_private_pypi: false
+    secrets: inherit
