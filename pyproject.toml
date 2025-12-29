@@ -15,7 +15,10 @@ authors = [
 urls = { Homepage = "https://goldstandardphantoms.com" }
 
 
-dependencies = ["numpy>=2.3.5"]
+dependencies = [
+  "numpy>=2.3.5",
+  "itk-elastix>=0.23.0",
+]
 
 
 [dependency-groups]
@@ -30,14 +33,21 @@ dev = [
   "ruff>=0.14.3",
   "mypy>=1.18.2",
   "scipy-stubs>=1.16.3.2",
+  # Scipy and nibabel included as development dependency as they are used
+  # for testing the slice thickness function and registration.
   "scipy>=1.16.3",
+  "nibabel>=5.3.3",
 ]
 
 [project.scripts]
-spirit-phantom = "spirit_phantom:main"
+spirit-phantom = "spirit_phantom.cli:main"
 
 [tool.setuptools]
+package-data = { "spirit_phantom" = [
+  "core/registration_parameters_Rigid.txt",
+  "core/registration_parameters_Affine.txt",
+] }
 package-dir = { "" = "src" }
-
+include-package-data = true
 
 [tool.setuptools_scm]

@@ -1,0 +1,54 @@
+// Affine registration parameter file for Elastix
+// Based on NIfTI Phantom Image Registration specification
+
+// Main components
+(Registration "MultiResolutionRegistration")
+(Interpolator "NearestNeighborInterpolator")
+(ResampleInterpolator "FinalNearestNeighborInterpolator")
+(Resampler "DefaultResampler")
+(FixedImagePyramid "FixedRecursiveImagePyramid")
+(MovingImagePyramid "MovingRecursiveImagePyramid")
+(Optimizer "AdaptiveStochasticGradientDescent")
+(Transform "AffineTransform")
+(Metric "AdvancedMattesMutualInformation")
+
+// Multi-resolution settings
+(NumberOfResolutions 3)
+(ImagePyramidSchedule 4 4 2  2 2 1  1 1 1)
+
+// Transform parameters
+(AutomaticScalesEstimation "true")
+(AutomaticTransformInitialization "false")  // Initialize from previous
+(HowToCombineTransforms "Compose")
+
+// Metric parameters
+(NumberOfHistogramBins 64)
+(NumberOfSpatialSamples 5000)
+(NewSamplesEveryIteration "true")
+(ImageSampler "Random")
+(UseDirectionCosines "true")
+
+// Optimizer parameters
+(MaximumNumberOfIterations 1000)
+(MaximumStepLength 0.5)
+(MinimumStepLength 0.0001)
+(RelaxationFactor 0.6)
+
+// Regularization for affine
+(SP_a 10.0)  // Regularization weight to prevent extreme deformations
+
+// Image settings
+(FixedInternalImagePixelType "float")
+(MovingInternalImagePixelType "float")
+(FixedImageDimension 3)
+(MovingImageDimension 3)
+
+// Output settings
+(DefaultPixelValue 0)
+(WriteResultImage "true")
+(ResultImagePixelType "short")
+(ResultImageFormat "nii.gz")
+(CompressResultImage "true")
+(WriteIterationInfo "false")
+(WriteTransformParametersEachIteration "false")
+(WriteResultImageAfterEachResolution "false")
