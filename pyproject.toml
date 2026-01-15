@@ -13,6 +13,7 @@ authors = [
   { name = 'Frank Bolton', email = 'frank.bolton@goldstandardphantoms.com' },
 ]
 urls = { Homepage = "https://goldstandardphantoms.com" }
+license = "MIT"
 
 
 dependencies = ["numpy>=2.3.5"]
