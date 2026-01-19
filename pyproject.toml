@@ -16,7 +16,7 @@ urls = { Homepage = "https://goldstandardphantoms.com" }
 license = "MIT"
 
 
-dependencies = ["numpy>=2.3.5"]
+dependencies = ["numpy>=2.3.5", "itk-elastix>=0.23.0"]
 
 
 [dependency-groups]
@@ -38,7 +38,12 @@ dev = [
 spirit-phantom = "spirit_phantom:main"
 
 [tool.setuptools]
+package-data = { "spirit_phantom" = [
+  "core/configuration/parameters_Rigid.txt",
+  "core/configuration/parameters_Affine.txt",
+  "core/configuration/parameters_B_Spline.txt",
+] }
 package-dir = { "" = "src" }
-
+include-package-data = true
 
 [tool.setuptools_scm]

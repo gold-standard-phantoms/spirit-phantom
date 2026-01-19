@@ -69,6 +69,49 @@ Calculation of slice thickness for the two wedges, checking for tilt along
 the y-axis (NEMA MS-5 2018: Equation 6) and calculation of the mean is left
 to the caller.
 
+### Image Registration Function
+
+The registration module provides functions for registering phantom images and
+transforming point coordinates. Registration is performed using a multi-stage
+approach: first a rigid (Euler) transform, then an affine transform, followed
+by a B-spline transform.
+
+To register a moving image to a fixed image:
+
+```
+from pathlib import Path
+from spirit_phantom.core.registration import register_atlas
+
+(rigid_transform, affine_transform, B_spline_transform) = register_atlas(
+    moving_image=Path("moving_image.nii.gz"),
+    fixed_image=Path("fixed_image.nii.gz"),
+    result_image_save_path=Path("registered_image.nii.gz"),
+    transform_params_save_path=Path("transform_directory"),
+)
+```
+
+The `register_atlas` function returns a tuple of paths to the transform parameter files. All transform files are saved in the `transform_params_save_path` directory.
+
+To transform grid point locations from the moving image space to the fixed
+image space:
+
+```
+import itk
+from spirit_phantom.core.registration import transform_points_moving_to_fixed
+
+fixed_image = itk.imread("fixed_image.nii.gz", itk.F)
+transformed_points = transform_points_moving_to_fixed(
+    fixed_image=fixed_image,
+    forward_transform_file=Path("transform_directory/BSpline_Transform.txt"),
+    points_csv_path=Path("grid_points.csv"),
+    save_path=Path("output_directory"),
+)
+```
+
+The CSV file at `points_csv_path` should contain a header row (e.g., "X,Y,Z" for 3D points)
+followed by rows of comma-separated coordinates. The transformed points are returned as
+a numpy array and optionally saved to a CSV file.
+
 ## Development
 
 Steps to set up your environment for development on `spirit-phantom`:
