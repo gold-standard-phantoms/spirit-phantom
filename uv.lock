@@ -260,6 +260,139 @@ wheels = [
 ]
 
 [[package]]
+name = "itk"
+version = "5.4.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "itk-core" },
+    { name = "itk-filtering" },
+    { name = "itk-io" },
+    { name = "itk-numerics" },
+    { name = "itk-registration" },
+    { name = "itk-segmentation" },
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/01/61d7ed1c0c1fae8a818809231cd4eb6c91c5d14799a6e43b15aa7e051489/itk-5.4.5-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:385b34fe0e04c8dcf2920a80809f96d2aa9f4c415fb7616932d39931f5af4624", size = 16784, upload-time = "2025-11-24T01:49:46.386Z" },
+    { url = "https://files.pythonhosted.org/packages/57/4c/94c3404b5c627962219e7f509616492498344e8d9692cb2858fbad0fdae7/itk-5.4.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:160cc9353c07217d7017adde22c39f3eb34bfe66e32a951502bd9687a2450f84", size = 16784, upload-time = "2025-11-24T01:49:47.093Z" },
+    { url = "https://files.pythonhosted.org/packages/84/01/6e191c4baf718d6d6723476a6c97d110b8490875bf85a280b02513330833/itk-5.4.5-cp311-abi3-manylinux2014_x86_64.whl", hash = "sha256:d4bd2c318f581bdb005790907df58b22de272bc1f5ce0c7573e31d056f1bbb14", size = 16796, upload-time = "2025-11-24T01:49:48.239Z" },
+    { url = "https://files.pythonhosted.org/packages/74/87/2b8386f9ab4e9fbc8bf8298009d480a35852945b6595f07ebe476d6277c4/itk-5.4.5-cp311-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:6546a047ab92b34b204711dc69967c91569e42d8bc87ccd49836a9cd64c8c1c2", size = 16799, upload-time = "2025-11-24T01:49:49.366Z" },
+    { url = "https://files.pythonhosted.org/packages/78/a5/1da5886589d7397b070982f61edd929ded52f8dcbb5342445e9784d40c5d/itk-5.4.5-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:678fd2a3ebf2d8225e08b13839ea7e490dea0d7762b24f978fec3e20a6e853b3", size = 16798, upload-time = "2025-11-24T01:49:50.437Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/c0/543e6a0a50580c7fc2ace30133283a6aed11dd13831a38583fd88b2c0a64/itk-5.4.5-cp311-abi3-win_amd64.whl", hash = "sha256:6969d30de84e08d626d8b6827c5dab3f1e5f208322ece7d08d44b09448a1e221", size = 16780, upload-time = "2025-11-24T01:49:51.502Z" },
+]
+
+[[package]]
+name = "itk-core"
+version = "5.4.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/f2/10431e53c7cabc350852fded74095485928739431332c6808c7622889f76/itk_core-5.4.5-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:c57987086a26d1a68234608556842222720a8c2a7ac3ccfd1985320a5421497f", size = 70094231, upload-time = "2025-11-24T01:50:21.675Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/78/7b24c3d46b8e725e464f70df33e7ed27663a3f500c8108514c793afce12a/itk_core-5.4.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:02c570663785fe4ecb6a927e88a396c0f6dff3d0bec62509c6651f73cd157b79", size = 59488498, upload-time = "2025-11-24T01:50:25.67Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/d8/93b78a9a4080b5f20b18109fbd3e296f899607e0fdc7aae01bd9d5700580/itk_core-5.4.5-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:99e7817a5189b0c5cd65b308cf8d6f8de97656644dee85da50d2b0b55a42e0ed", size = 83057534, upload-time = "2025-11-24T01:50:29.579Z" },
+    { url = "https://files.pythonhosted.org/packages/07/f5/dbb4b97f17f0303aad7b6966f4a67fbb27845fd413c6b0b3a78b2f9079f5/itk_core-5.4.5-cp311-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:557e150eb0eff5ada5f1feaa42c3d13fc35de5867972929b9d1ed58eb490c050", size = 72879473, upload-time = "2025-11-24T01:50:34.063Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/55/e419ddaf0d4591e19d87e1c4b57905e0a8231f33449cd2298c3c67cc7a07/itk_core-5.4.5-cp311-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f16b9703ac45f1926a0f55dd07b7881028933b1c3da0b31cddabd0eb12417440", size = 80939359, upload-time = "2025-11-24T01:50:38.13Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/84/6655e0e45fa69c42c860d1241c7884f5a49c71498ad54b1af0a7c12d63f6/itk_core-5.4.5-cp311-abi3-win_amd64.whl", hash = "sha256:7ada3e3ebc1e54a3dd345dabb28e0495ca60c69addc943c788cc33b4d35cf0dc", size = 37354338, upload-time = "2025-11-24T01:50:41.321Z" },
+]
+
+[[package]]
+name = "itk-elastix"
+version = "0.23.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "itk" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/ca/f91ca4c037fac506f45270c3d09aa96ce0feffc0f6ef418cae14d8e7c366/itk_elastix-0.23.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:baaf61a1adcaf2225ccfc2a40a259b82005b37541ec7000070b9c35fdf6ccc8f", size = 13215551, upload-time = "2025-04-15T10:54:10.147Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/07/218fa776e4ffa6083cce8acd584c20f01e3a2acff5e0946024039b8bad44/itk_elastix-0.23.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b529f17f8f97c22575dbe9ad5987b2bba47999bbfe8ea391dace018e351d2164", size = 21150061, upload-time = "2025-04-15T10:54:12.557Z" },
+    { url = "https://files.pythonhosted.org/packages/54/19/5f8c9ebd49b7cb00bea7012c5469cdf885af232d37777947614a596ebdd5/itk_elastix-0.23.0-cp311-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:b37a5a767655089ae6d941ec223e39c96dfbe79a790fdfe8045f91d81cf17244", size = 19548452, upload-time = "2025-04-15T10:54:15.019Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/46/a8aab730d8d75ccaf155be543e2e314fcf87fc6272f5abe19f1565f78a20/itk_elastix-0.23.0-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:9b1befecc1d3d8c911913a9eecf946cb977abcc9558bd2e51ae7095e636dcb0c", size = 21382392, upload-time = "2025-04-15T10:54:17.139Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/79/7937004d1a2a875bb9360280d5b6922b28af8e671904cd8d94c8e679f374/itk_elastix-0.23.0-cp311-abi3-win_amd64.whl", hash = "sha256:b96120d7402e3550db2a686f3af21034bb60ea67df45185e5f6021b9491ed60d", size = 7749495, upload-time = "2025-04-15T10:54:19.148Z" },
+]
+
+[[package]]
+name = "itk-filtering"
+version = "5.4.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "itk-numerics" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/6f/cc33682dd1c0905b387507ee9119c4da853195dd720b92bbf3dc7afbb08d/itk_filtering-5.4.5-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:d76f54643a22e9e24497e73cc0b52568eafa5f88c917e4cb70172977e83a0866", size = 46763255, upload-time = "2025-11-24T01:51:25.959Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/c1/cf3bbcffcf2606ccd449e720d30052aa397e32a44f1e8dabdad1b5adb295/itk_filtering-5.4.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:f0dbed2949806917fd864531f986d7dfea44ae96a5bc9c4226f22e410740ad12", size = 38995276, upload-time = "2025-11-24T01:51:29.014Z" },
+    { url = "https://files.pythonhosted.org/packages/18/88/c61b1c25d826dc7c98081b6225dad2071e9adc60a033f54301cb38ab2384/itk_filtering-5.4.5-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:1e0c4fb85c294f49ff1cbe08ba5ed29d1fa07591997f77a79f2a0be26a23b3d4", size = 69461035, upload-time = "2025-11-24T01:51:32.266Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/b3/4b71843637443b8eed49f756d2fa061b19c56a33c2b77923def2ede26310/itk_filtering-5.4.5-cp311-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:9792e44ada48d906d9ad86d1ebab59a47daa81693bfcc712d66a932a111a23b5", size = 63907225, upload-time = "2025-11-24T01:51:36.089Z" },
+    { url = "https://files.pythonhosted.org/packages/92/fc/71d4b37b3b058012f3a90074c58d0d88d234408a31982a2c021ddb95bc05/itk_filtering-5.4.5-cp311-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b45ed82d76439e3bfbe4176f5124a694b18e8450e655ffae7338a7920aa1165b", size = 67828463, upload-time = "2025-11-24T01:51:39.486Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/0a/88bb4454f8ca9710e47c21afec846f87feb635387639c49599f6e2735aec/itk_filtering-5.4.5-cp311-abi3-win_amd64.whl", hash = "sha256:e9f8d53e8561a90dc6609f3b13310789fcca5900fe2232ad279839683082ddbe", size = 23571633, upload-time = "2025-11-24T01:51:42.336Z" },
+]
+
+[[package]]
+name = "itk-io"
+version = "5.4.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "itk-core" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/29/9a/63bb73b3caf92d5aa9bea4a93a6aef761abf4f6c597a833885032c60d11e/itk_io-5.4.5-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:046a96b29c8207fec6fb67ddc83b430439c721516195d56de11db0f5e8d4396f", size = 22347413, upload-time = "2025-11-24T02:00:47.59Z" },
+    { url = "https://files.pythonhosted.org/packages/35/d8/3f735377f3c74a10c1d8a590d0c91526a619a867e624529c5661d3af574f/itk_io-5.4.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:b55eb3448b022eb34960f4d79e8d69f2907c8c5a9ee97f7cb06ff78fdbca073d", size = 17783795, upload-time = "2025-11-24T02:00:49.852Z" },
+    { url = "https://files.pythonhosted.org/packages/49/43/86bc1fe44904e78fa1dc2f67b4c414dc33696709c428446afe995dfa9781/itk_io-5.4.5-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:b6eb08b92fee85a59d0f3d2656cf0035f6be9d322a0afbeafcc403a8756666f5", size = 27675441, upload-time = "2025-11-24T02:00:52.2Z" },
+    { url = "https://files.pythonhosted.org/packages/40/3f/26ca9917a5e513266f71617305a96448c20c5781a4532df773c30ba3136a/itk_io-5.4.5-cp311-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:78374b061bab832a57e966b65a3e2f569e947bcbc3e206941052328c225e0068", size = 25591581, upload-time = "2025-11-24T02:00:54.629Z" },
+    { url = "https://files.pythonhosted.org/packages/17/fc/3c1372cfc1b4ac7fff6fa7a010b71c4e7988e54b573b5fe93b8282520b4e/itk_io-5.4.5-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:3429559a6ce23500444c945dc8a373a2a60e01b7f02740b67a65df6f36b3a83d", size = 28007334, upload-time = "2025-11-24T02:00:57.245Z" },
+    { url = "https://files.pythonhosted.org/packages/32/6a/ed83f789fafbbb8a8e8713ab026f36064275d8db6e6d967dba5ef8077097/itk_io-5.4.5-cp311-abi3-win_amd64.whl", hash = "sha256:ac068c7948f34de9492754b45982afa7891a7e0622093309bc48e159a21edcaf", size = 8680633, upload-time = "2025-11-24T02:01:00.026Z" },
+]
+
+[[package]]
+name = "itk-numerics"
+version = "5.4.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "itk-core" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/5e/c35aa1ae42c6b27b2328783e9d98d2a58bd24abff717eb5c11eeaa0957c2/itk_numerics-5.4.5-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:895ea206d2e49f6649268fd9bc7e08ffe04df96801b3c95217586f22628b6472", size = 35826123, upload-time = "2025-11-24T02:01:36.88Z" },
+    { url = "https://files.pythonhosted.org/packages/49/bb/5badaa1b81a0dfdacd7858ddeb22d066cf3043d81327237d5be495e6687d/itk_numerics-5.4.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:a6f6d84a20255fbb03edc05e92f570a07de4dfce50a949eed190d1a49a844c00", size = 30871523, upload-time = "2025-11-24T02:01:39.878Z" },
+    { url = "https://files.pythonhosted.org/packages/92/16/39d2883247eccb018b020835d8e707ecb7d8c9a3245269ea58ffc5b7ac82/itk_numerics-5.4.5-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:29978c48f3c16f502dd70a4acad1032de1f72b07826e59d7118054c643b83d2a", size = 58141136, upload-time = "2025-11-24T02:01:43.46Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/ce/632ce4e5c8a67aa658a1fc95ea4415f87c8aee98cfc76e77f2167a186c57/itk_numerics-5.4.5-cp311-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b70200d13ab2cb744e198098a6e1594b9fc4b22c69cf5eacb765358234e332b1", size = 53999251, upload-time = "2025-11-24T02:01:46.773Z" },
+    { url = "https://files.pythonhosted.org/packages/79/68/c148c2f8d04b0246d17d02a80e5365fbb3993b06c246fe68155e777e563a/itk_numerics-5.4.5-cp311-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b42b51b42981f61ea5aee8a2a7b0209ff2e76a2045041d3314b21223b6e4fbdc", size = 57195942, upload-time = "2025-11-24T02:01:50.563Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/c2/a46596f456e1415b61109195c43b8ee5985158fc1ce60d7df20ac9005892/itk_numerics-5.4.5-cp311-abi3-win_amd64.whl", hash = "sha256:e3461fe0132661965a7a05a1f1f1a2510909dcdc10484def62beb1095d1f81db", size = 19732031, upload-time = "2025-11-24T02:01:53.422Z" },
+]
+
+[[package]]
+name = "itk-registration"
+version = "5.4.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "itk-filtering" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e3/da/b4cca879b27977e379dfc205776e2e1bcdc87830ff12500aca3742cda39d/itk_registration-5.4.5-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:00f0148b2905ffd67bfabd7fdb97f84926c67ff69aeb5ade772eb56008f201ee", size = 22012492, upload-time = "2025-11-24T02:02:30.633Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/ae/7564f9c93a24b7ec815518a782614d2dead8b5e218baa18798752bbaafa2/itk_registration-5.4.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:785606f1f4cace70bbf7803a777bd12dd2112128f343ab6d2f4cf07187710f0a", size = 17848677, upload-time = "2025-11-24T02:02:32.95Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/f3/aa51fcb9645980327279f6a61fee8b90a866ce0ae3b6925f6d343e82104a/itk_registration-5.4.5-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:745c10852a2866e21d500f095634899d7c63091f0f8526731c6493c362259f39", size = 28996411, upload-time = "2025-11-24T02:02:35.905Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/f2/b457137517c4e0b613f0b1117427bab4f5bb7eabb049ecf80c4f20f76b36/itk_registration-5.4.5-cp311-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:278eabe95110f9b4cf6a1c0bab47c26afb44b7ce2085db6de8d580f2a748f6f6", size = 26091776, upload-time = "2025-11-24T02:02:40.894Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/ab/396fbb26730bc9f0280b23e419534faa709b50aa706dc547dc71ac9fa323/itk_registration-5.4.5-cp311-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:a0495cb2a6e585e74215c1022613673d5b3f3e39cbe05fbb5a23cba317092b21", size = 28540260, upload-time = "2025-11-24T02:02:45.296Z" },
+    { url = "https://files.pythonhosted.org/packages/22/73/c2424c210d92c66a0b7ed200cbca930d0b784cdd5289d82bd40e7c4a5f70/itk_registration-5.4.5-cp311-abi3-win_amd64.whl", hash = "sha256:7075a3f85362f11ea56f1791a7abe72fe6214976b7cd6cfcb1650c6b6b746924", size = 9528625, upload-time = "2025-11-24T02:02:47.972Z" },
+]
+
+[[package]]
+name = "itk-segmentation"
+version = "5.4.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "itk-filtering" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/af/63ddc78ce33181a6fecc26eeec45ecf38f2ea0f1340238d6799da939e1ec/itk_segmentation-5.4.5-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:ece8ea70f3dfaedfaca617b6faba569b149fb020b7b2f6ed90e85bbc8de8ee6f", size = 13067611, upload-time = "2025-11-24T02:03:27.378Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/79/880dafe2539d58da0c0a4efb226d7caa1d4ffee0b4177cff4b4d180491d9/itk_segmentation-5.4.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:916ee89ec7090ce6b1de271bb7cc60244fd58bdc28d427745c800d257520f541", size = 11039669, upload-time = "2025-11-24T02:03:29.434Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/f7/5408b1433b5aa16a668e3c7c10b8fb255ffed06e554c26ad7e912c4c63cf/itk_segmentation-5.4.5-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:ce1794832dacaf5b002781b47f2b0aff19d3e57b9c73e1671e9b6d1d3c321d25", size = 16465538, upload-time = "2025-11-24T02:03:31.824Z" },
+    { url = "https://files.pythonhosted.org/packages/04/9e/908767d8e6b51dd00cf76c479a31b1dff2ac7db96ddb9c37a78c14b29301/itk_segmentation-5.4.5-cp311-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:0a6bed816025d3dea4bb9055e65d6b12b872003cdd15667acb95b3a25bab2964", size = 14652816, upload-time = "2025-11-24T02:03:33.996Z" },
+    { url = "https://files.pythonhosted.org/packages/77/26/04c1e6068d9e78ce39bd3c32652b5472b77c1e3fd21f0121455cf41a14d3/itk_segmentation-5.4.5-cp311-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ac82b55ba1a7d0db651db2bbc5a5a942c06f6b80c156e1e7a8fab36fe39083d7", size = 15898132, upload-time = "2025-11-24T02:03:36.561Z" },
+    { url = "https://files.pythonhosted.org/packages/83/3d/71842281ce38d811ab6d06723199b8044b1a7d4fda0ae143896746bd1552/itk_segmentation-5.4.5-cp311-abi3-win_amd64.whl", hash = "sha256:ce97280aa96f84360df44c577066c0763c40f6bac212920a3feb4bb1ed5678dc", size = 5034074, upload-time = "2025-11-24T02:03:38.555Z" },
+]
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -930,6 +1063,7 @@ wheels = [
 name = "spirit-phantom"
 source = { editable = "." }
 dependencies = [
+    { name = "itk-elastix" },
     { name = "numpy" },
 ]
 
@@ -949,7 +1083,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "numpy", specifier = ">=2.3.5" }]
+requires-dist = [
+    { name = "itk-elastix", specifier = ">=0.23.0" },
+    { name = "numpy", specifier = ">=2.3.5" },
+]
 
 [package.metadata.requires-dev]
 dev = [
