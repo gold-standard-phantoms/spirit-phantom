@@ -69,6 +69,46 @@ Calculation of slice thickness for the two wedges, checking for tilt along
 the y-axis (NEMA MS-5 2018: Equation 6) and calculation of the mean is left
 to the caller.
 
+### Image Registration Function
+
+The registration module provides functions for registering phantom images and
+transforming point coordinates. Registration is performed using a multi-stage
+approach: first a rigid (Euler) transform, then an affine transform, followed
+by a B-spline transform.
+
+To register a moving image to a fixed image:
+
+```
+from pathlib import Path
+from spirit_phantom.core.registration import register_atlas
+
+result = register_atlas(
+    moving_image=Path("moving_image.nii.gz"),
+    fixed_image=Path("fixed_image.nii.gz"),
+    output_directory=Path("registration_output"),
+)
+
+# Access final registered image and transform (convenience aliases)
+print(result.registered_image_path)       # Final registered image
+print(result.registration_transform_path) # Final composed transform
+
+# Access intermediate images
+print(result.rigid_image_path)    # Rigid-registered image
+print(result.affine_image_path)   # Affine-registered image
+print(result.bspline_image_path)  # B-spline registered (same as registered_image_path)
+
+# Access input parameters used for each stage
+print(result.rigid_parameters_path)
+print(result.affine_parameters_path)
+print(result.bspline_parameters_path)
+
+# Access output transforms for each stage
+print(result.rigid_transform_path)
+print(result.affine_transform_path)
+print(result.bspline_transform_path)  # Same as registration_transform_path
+```
+
+The `register_atlas` function returns a `RegistrationResult` containing paths to all output files. All outputs are saved in the `output_directory`.
 ## Development
 
 Steps to set up your environment for development on `spirit-phantom`:
