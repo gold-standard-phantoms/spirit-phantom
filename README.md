@@ -109,6 +109,28 @@ print(result.bspline_transform_path)  # Same as registration_transform_path
 ```
 
 The `register_atlas` function returns a `RegistrationResult` containing paths to all output files. All outputs are saved in the `output_directory`.
+
+### Checkerboard visualisation
+
+After registration, checkerboard images can be generated to visually inspect the
+alignment between the fixed and registered images on selected axial slices:
+
+```
+from pathlib import Path
+
+from spirit_phantom.utils.visualisation import visualise_checkerboard
+
+visualise_checkerboard(
+    fixed_image_path=Path("fixed_image.nii.gz"),
+    registered_image_path=Path("registration_output/registered_image.nii.gz"),
+    slice_indices=[180, 240, 300],
+)
+```
+
+The `slice_indices` argument specifies the axial slice indices (z indices) at which
+checkerboard images are generated, allowing visual assessment of registration
+quality on slices of interest.
+
 ## Development
 
 Steps to set up your environment for development on `spirit-phantom`:
