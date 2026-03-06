@@ -1,0 +1,184 @@
+{
+  "vials": [
+    {
+      "vial_id": "A",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0320",
+      "description": "0.320mM Aqueous MnCl2",
+      "vial_size": "10 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 17
+    },
+    {
+      "vial_id": "B",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0159",
+      "description": "0.159mM Aqueous MnCl2",
+      "vial_size": "10 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 18
+    },
+    {
+      "vial_id": "C",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0110",
+      "description": "0.110mM Aqueous MnCl2",
+      "vial_size": "10 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 20
+    },
+    {
+      "vial_id": "D",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0039",
+      "description": "0.039mM Aqueous MnCl2",
+      "vial_size": "10 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 19
+    },
+    {
+      "vial_id": "E",
+      "type": "Diffusion",
+      "product_code": "PVP-0050",
+      "description": "5% Aqueous PVP NiCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2", "D"],
+      "segment_index": 11
+    },
+    {
+      "vial_id": "F",
+      "type": "Diffusion",
+      "product_code": "PVP-0100",
+      "description": "10% Aqueous PVP NiCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2", "D"],
+      "segment_index": 14
+    },
+    {
+      "vial_id": "G",
+      "type": "Diffusion",
+      "product_code": "PVP-0150",
+      "description": "15% Aqueous PVP NiCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2", "D"],
+      "segment_index": 13
+    },
+    {
+      "vial_id": "H",
+      "type": "Diffusion",
+      "product_code": "PVP-0200",
+      "description": "20% Aqueous PVP NiCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2", "D"],
+      "segment_index": 10
+    },
+    {
+      "vial_id": "I",
+      "type": "Diffusion",
+      "product_code": "PVP-0250",
+      "description": "25% Aqueous PVP NiCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2", "D"],
+      "segment_index": 6
+    },
+    {
+      "vial_id": "J",
+      "type": "Diffusion",
+      "product_code": "PVP-0300",
+      "description": "30% Aqueous PVP NiCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2", "D"],
+      "segment_index": 3
+    },
+    {
+      "vial_id": "K",
+      "type": "Diffusion",
+      "product_code": "PVP-0400",
+      "description": "40% Aqueous PVP NiCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2", "D"],
+      "segment_index": 4
+    },
+    {
+      "vial_id": "L",
+      "type": "Diffusion",
+      "product_code": "PVP-0500",
+      "description": "50% Aqueous PVP",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2", "D"],
+      "segment_index": 7
+    },
+    {
+      "vial_id": "M",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0078",
+      "description": "0.078mM Aqueous MnCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 12
+    },
+    {
+      "vial_id": "N",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0110",
+      "description": "0.110mM Aqueous MnCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 16
+    },
+    {
+      "vial_id": "O",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0480",
+      "description": "0.480mM Aqueous MnCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 15
+    },
+    {
+      "vial_id": "P",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0039",
+      "description": "0.039mM Aqueous MnCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 9
+    },
+    {
+      "vial_id": "Q",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0630",
+      "description": "0.630mM Aqueous MnCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 5
+    },
+    {
+      "vial_id": "R",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0320",
+      "description": "0.320mM Aqueous MnCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 1
+    },
+    {
+      "vial_id": "S",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0017",
+      "description": "0.017mM Aqueous MnCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 2
+    },
+    {
+      "vial_id": "T",
+      "type": "Relaxometry",
+      "product_code": "MNCL-0159",
+      "description": "0.159mM Aqueous MnCl2",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": ["T1", "T2"],
+      "segment_index": 8
+    }
+  ]
+}
