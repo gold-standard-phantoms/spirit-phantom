@@ -15,6 +15,7 @@ from spirit_phantom.core.vials import (
     compute_vial_statistics_details,
     format_vial_statistics_details_table,
     format_vial_statistics_table,
+    generate_dice_score_table,
     print_vial_statistics_details_table,
     print_vial_statistics_table,
     save_vial_statistics_details_table,
@@ -315,3 +316,42 @@ def test_print_vial_statistics_details_table_writes_to_stdout(
     assert written.endswith("\n")
     assert "Vial ID" in written
     assert "MNCL-0320" in written
+
+
+def test_generate_dice_score_table_uses_manual_to_atlas_mapping(tmp_path: Path) -> None:
+    """Compute Dice with manual labels remapped through vial configuration."""
+    manual = np.zeros((6, 6, 6), dtype=np.int16)
+    atlas = np.zeros((6, 6, 6), dtype=np.int16)
+
+    # Manual label 1 (vial A) should compare against atlas label 17.
+    manual[1:4, 1:4, 1:4] = 1
+    atlas[1:4, 1:4, 1:4] = 17
+
+    # Manual label 4 (vial D) should compare against atlas label 19.
+    manual[4:6, 4:6, 4:6] = 4
+    atlas[4:6, 4:6, 4:5] = 19
+
+    manual_path = tmp_path / "manual_segmentation.nii.gz"
+    atlas_path = tmp_path / "registered_atlas.nii.gz"
+    _save_nifti(image_data=manual, output_path=manual_path)
+    _save_nifti(image_data=atlas, output_path=atlas_path)
+
+    rows = generate_dice_score_table(
+        manual_segmentation_image_path=manual_path,
+        registered_atlas_image_path=atlas_path,
+    )
+
+    assert len(rows) == 20
+
+    row_a = rows[0]
+    assert row_a["vial_id"] == "A"
+    assert row_a["manual_label"] == 1
+    assert row_a["atlas_label"] == 17
+    assert row_a["dice_score"] == pytest.approx(1.0)
+
+    row_d = rows[3]
+    expected_row_d_dice = 2.0 * 4.0 / (8.0 + 4.0)
+    assert row_d["vial_id"] == "D"
+    assert row_d["manual_label"] == 4
+    assert row_d["atlas_label"] == 19
+    assert row_d["dice_score"] == pytest.approx(expected_row_d_dice)
