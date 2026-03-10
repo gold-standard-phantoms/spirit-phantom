@@ -50,6 +50,69 @@ pip install -e .
 
 ## Usage
 
+### Command Line Interface
+
+The CLI supports both atomic and combined workflows:
+
+- Register once, then run one or more analysis commands.
+- Register and immediately run analysis in one command.
+
+Atomic registration:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --output-directory path/to/registration_output
+```
+
+Registration outputs are saved to `path/to/registration_output` as:
+
+- `Rigid_Image.nii.gz`
+- `Affine_Image.nii.gz`
+- `Bspline_Image.nii.gz`
+
+`Bspline_Image.nii.gz` is the final registration result and should be used for vial measurements.
+
+By default, `register` downloads the default SPIRIT atlas image and caches it locally using `pooch` (cache namespace: `spirit-phantom`).
+The pinned download URL and expected SHA-256 are configured in `src/spirit_phantom/cli.py`:
+
+- URL: `https://raw.githubusercontent.com/gold-standard-phantoms/public-data/121591075cd927c0cb49cdffe91c3292c4882ffc/phantoms/SPIRIT/atlas/spirit_issue1.0_vx0.25_sub1.nii.gz`
+- SHA-256: `77f027524325c4ad4d2d23ee8c224dfd04080216531c309d93e9fe41d686739d`
+The first run may require network access; subsequent runs use the cached atlas.
+
+To override the default atlas, pass a moving image path as the second argument:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  path/to/atlas.nii.gz \
+  --output-directory path/to/registration_output
+```
+
+Atomic vial measurement analysis (prints detailed table; saves only when output directory is provided):
+
+```bash
+uv run spirit-phantom analyse vial-measurements \
+  path/to/registration_output/Bspline_Image.nii.gz \
+  path/to/scanner_image.nii.gz \
+  --erosion-voxels 0 \
+  --output-directory path/to/analysis_output
+```
+
+Combined workflow (register and then run vial measurements):
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --output-directory path/to/registration_output \
+  --analyse vial-measurements \
+  --erosion-voxels 0
+```
+
+In the combined case, detailed vial statistics are saved automatically to:
+
+`path/to/registration_output/vial_statistics_details.txt`
+
 The NEMA MS-5 2018 slice thickness function will be used as an example. 
 The spirit-phantom function expects a numpy array for the wedge ROI ordered 
 such that the rows each contain one edge transfer function (line up the edge)

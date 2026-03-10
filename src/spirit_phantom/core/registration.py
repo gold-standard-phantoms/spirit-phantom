@@ -395,6 +395,7 @@ def register_atlas(
     moving_image: Path,
     fixed_image: Path,
     output_directory: Path,
+    cli_user: bool = False,
 ) -> RegistrationResult:
     """Register the moving image to the fixed image using file paths.
 
@@ -410,6 +411,7 @@ def register_atlas(
         fixed_image: Path to the fixed (target) reference image file.
         output_directory: Directory for all output files. Intermediate images,
             input parameters, and transform files will all be saved here.
+        cli_user: Whether the function is being called from the CLI. If True, will print logging messages to the console.
 
     Returns:
         RegistrationResult containing paths to all output files including
@@ -443,19 +445,27 @@ def register_atlas(
     moving_image_itk = itk.imread(str(moving_image), itk.F)
     fixed_image_itk = itk.imread(str(fixed_image), itk.F)
 
+    if cli_user:
+        print("Performing rigid part of registration...")
     # Perform three-stage registration: rigid, affine, B-spline
     rigid_result = _perform_rigid_registration(
         fixed_image_itk, moving_image_itk, output_directory
     )
+    if cli_user:
+        print("Performing affine part of registration...")
     affine_result = _perform_affine_registration(
         fixed_image_itk, moving_image_itk, rigid_result.transform_path, output_directory
     )
+    if cli_user:
+        print("Performing B-spline part of registration...")
     bspline_result = _perform_bspline_registration(
         fixed_image_itk,
         moving_image_itk,
         affine_result.transform_path,
         output_directory,
     )
+    if cli_user:
+        print("Registration complete!")
 
     return RegistrationResult(
         rigid_image_path=rigid_result.image_path,
