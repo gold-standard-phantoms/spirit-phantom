@@ -44,6 +44,7 @@ DEFAULT_VIAL_LABELS: tuple[int, ...] = tuple(range(1, 21))
 DEFAULT_EROSION_VOXELS = 0
 EXPECTED_MASK_DIMENSIONS = 3
 VIAL_CONFIG_PATH = Path(__file__).parent / "configuration" / "vial-configurations.json"
+EXPECTED_VIAL_COUNT = len(DEFAULT_VIAL_LABELS)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -531,3 +532,88 @@ def print_vial_statistics_table(
         file: Optional text stream. Defaults to standard output when ``None``.
     """
     print(format_vial_statistics_table(rows=rows), file=file)
+
+
+def generate_dice_score_table(
+    *,
+    manual_segmentation_image_path: Path,
+    registered_atlas_image_path: Path,
+) -> list[dict[str, int | str | float]]:
+    """Generate per-vial Dice scores using manual-to-atlas vial remapping.
+
+    The manual segmentation labels are expected to use vial order A..T as
+    intensities 1..20. The registered atlas uses segment indices from vial
+    configuration, so each manual label is remapped via ``vial_id`` before Dice
+    calculation.
+
+    Args:
+        manual_segmentation_image_path: Path to manual segmentation NIfTI.
+        registered_atlas_image_path: Path to registered atlas NIfTI.
+
+    Returns:
+        Per-vial rows containing vial metadata and Dice components:
+        ``vial_id``, ``manual_label``, ``atlas_label``, ``dice_score``,
+        ``manual_voxels``, ``atlas_voxels``, and ``intersection_voxels``.
+
+    Raises:
+        ValueError: If image dimensions mismatch or vial mapping is invalid.
+        FileNotFoundError: If either input NIfTI path does not exist.
+    """
+    manual_raw = _load_nifti_data(image_path=manual_segmentation_image_path)
+    atlas_raw = _load_nifti_data(image_path=registered_atlas_image_path)
+
+    manual_data: IntArray = np.rint(manual_raw).astype(np.int32)
+    atlas_data: IntArray = np.rint(atlas_raw).astype(np.int32)
+
+    if manual_data.shape != atlas_data.shape:
+        msg = (
+            "Manual segmentation and registered atlas must have the same shape. "
+            f"Got manual shape {manual_data.shape} and atlas shape {atlas_data.shape}."
+        )
+        raise ValueError(msg)
+
+    configurations = _validate_vial_configurations(
+        configurations=_load_vial_configurations()
+    )
+    ordered_configurations = sorted(configurations, key=lambda item: item.vial_id)
+
+    if len(ordered_configurations) < EXPECTED_VIAL_COUNT:
+        msg = (
+            "Vial configuration must include at least "
+            f"{EXPECTED_VIAL_COUNT} rows to map manual labels "
+            f"{DEFAULT_VIAL_LABELS[0]}..{DEFAULT_VIAL_LABELS[-1]} to atlas segment "
+            "indices."
+        )
+        raise ValueError(msg)
+
+    rows: list[dict[str, int | str | float]] = []
+    for manual_label in DEFAULT_VIAL_LABELS:
+        configuration = ordered_configurations[manual_label - 1]
+        atlas_label = int(configuration.segment_index)
+
+        manual_mask = manual_data == manual_label
+        atlas_mask = atlas_data == atlas_label
+
+        manual_voxels = int(np.count_nonzero(manual_mask))
+        atlas_voxels = int(np.count_nonzero(atlas_mask))
+        intersection_voxels = int(np.count_nonzero(manual_mask & atlas_mask))
+        denominator = manual_voxels + atlas_voxels
+        dice_score = (
+            float("nan")
+            if denominator == 0
+            else float((2.0 * intersection_voxels) / denominator)
+        )
+
+        rows.append(
+            {
+                "vial_id": configuration.vial_id,
+                "manual_label": manual_label,
+                "atlas_label": atlas_label,
+                "dice_score": dice_score,
+                "manual_voxels": manual_voxels,
+                "atlas_voxels": atlas_voxels,
+                "intersection_voxels": intersection_voxels,
+            }
+        )
+
+    return rows
