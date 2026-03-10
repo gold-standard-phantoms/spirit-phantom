@@ -163,6 +163,15 @@ classmethod-decorators = ["classmethod", "pydantic.validator"]
   "D104", # ignore missing docstring
 ]
 
+"cli.py" = [
+  "T201", # allow printing in cli
+]
+
+"src/spirit_phantom/core/registration.py" = [
+  "T201", # allow printing in registration
+]
+
+
 [lint.flake8-type-checking]
 # Exempt classes that list any of the enumerated classes as a base class from needing
 # to be moved into type-checking blocks.

@@ -50,6 +50,58 @@ pip install -e .
 
 ## Usage
 
+### Command Line Interface
+
+The CLI supports both atomic and combined workflows:
+
+- Register once, then run one or more analysis commands.
+- Register and immediately run analysis in one command.
+
+Atomic registration:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --output-directory path/to/registration_output
+```
+
+By default, `register` uses the bundled atlas image at:
+
+`src/spirit_phantom/core/configuration/spirit_issue1.0_vx0.25_sub2.84ada80.nii.gz`
+
+To override the bundled atlas, pass a moving image path as the second argument:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  path/to/atlas.nii.gz \
+  --output-directory path/to/registration_output
+```
+
+Atomic vial measurement analysis (prints detailed table; saves only when output directory is provided):
+
+```bash
+uv run spirit-phantom analyse vial-measurements \
+  path/to/registration_output/Bspline_Image.nii.gz \
+  path/to/scanner_image.nii.gz \
+  --erosion-voxels 0 \
+  --output-directory path/to/analysis_output
+```
+
+Combined workflow (register and then run vial measurements):
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --output-directory path/to/registration_output \
+  --analyse vial-measurements \
+  --erosion-voxels 0
+```
+
+In the combined case, detailed vial statistics are saved automatically to:
+
+`path/to/registration_output/vial_statistics_details.txt`
+
 The NEMA MS-5 2018 slice thickness function will be used as an example. 
 The spirit-phantom function expects a numpy array for the wedge ROI ordered 
 such that the rows each contain one edge transfer function (line up the edge)

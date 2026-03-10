@@ -20,6 +20,7 @@ dependencies = [
     "numpy>=2.3.5",
     "itk-elastix>=0.23.0",
     "pydantic>=2.11.9",
+    "typer>=0.24.1",
 ]
 
 
