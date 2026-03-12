@@ -8,8 +8,9 @@ on:
 jobs:
   test_job:
     name: Run Push Tests
-    uses: gold-standard-phantoms/github-actions/.github/workflows/python-test.yml@main
+    uses: gold-standard-phantoms/github-actions/.github/workflows/python-test.yml@feat/optional-use-lfs-cache
     with:
       python_version: "3.11"
       use_private_pypi: false
+      lfs: true
     secrets: inherit
