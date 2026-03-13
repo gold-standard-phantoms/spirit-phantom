@@ -16,7 +16,12 @@ urls = { Homepage = "https://goldstandardphantoms.com" }
 license = "MIT"
 
 
-dependencies = ["numpy>=2.3.5", "itk-elastix>=0.23.0"]
+dependencies = [
+    "numpy>=2.3.5",
+    "itk-elastix>=0.23.0",
+    "pydantic>=2.11.9",
+    "typer>=0.24.1",
+]
 
 
 [dependency-groups]
@@ -32,6 +37,7 @@ dev = [
   "mypy>=1.18.2",
   "scipy-stubs>=1.16.3.2",
   "scipy>=1.16.3",
+  "nibabel>=5.4.0",
 ]
 
 [project.scripts]
@@ -42,6 +48,7 @@ package-data = { "spirit_phantom" = [
   "core/configuration/parameters_Rigid.txt",
   "core/configuration/parameters_Affine.txt",
   "core/configuration/parameters_B_Spline.txt",
+  "core/configuration/vial-configurations.json",
 ] }
 package-dir = { "" = "src" }
 include-package-data = true

@@ -4,7 +4,6 @@ Tools for analysing Gold Standard Phantoms (GSP) SPIRIT phantom data.
 
 ## Installation
 
-
 ### Python Version
 
 We recommend using the latest supported version of Python. `spirit-phantom` currently supports Python 3.11–3.13.
@@ -51,6 +50,66 @@ pip install -e .
 
 ## Usage
 
+### Command Line Interface
+
+The CLI supports both atomic and combined workflows:
+
+- Register once, then run one or more analysis commands.
+- Register and immediately run analysis in one command.
+
+Atomic registration:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --output-directory path/to/registration_output
+```
+
+Registration outputs are saved to `path/to/registration_output` as:
+
+- `Rigid_Image.nii.gz`
+- `Affine_Image.nii.gz`
+- `Bspline_Image.nii.gz`
+
+`Bspline_Image.nii.gz` is the final registration result and should be used for vial measurements.
+
+By default, `register` uses the bundled atlas image at:
+
+`src/spirit_phantom/core/configuration/spirit_issue1.0_vx0.25_sub2.84ada80.nii.gz`
+
+To override the bundled atlas, pass a moving image path as the second argument:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  path/to/atlas.nii.gz \
+  --output-directory path/to/registration_output
+```
+
+Atomic vial measurement analysis (prints detailed table; saves only when output directory is provided):
+
+```bash
+uv run spirit-phantom analyse vial-measurements \
+  path/to/registration_output/Bspline_Image.nii.gz \
+  path/to/scanner_image.nii.gz \
+  --erosion-voxels 0 \
+  --output-directory path/to/analysis_output
+```
+
+Combined workflow (register and then run vial measurements):
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --output-directory path/to/registration_output \
+  --analyse vial-measurements \
+  --erosion-voxels 0
+```
+
+In the combined case, detailed vial statistics are saved automatically to:
+
+`path/to/registration_output/vial_statistics_details.txt`
+
 The NEMA MS-5 2018 slice thickness function will be used as an example. 
 The spirit-phantom function expects a numpy array for the wedge ROI ordered 
 such that the rows each contain one edge transfer function (line up the edge)
@@ -65,6 +124,7 @@ spirit_slice_thickness = slice_thickness.nema_slice_thickness(
         pixel_size=pixel_size_mm,
     )
 ```
+
 Calculation of slice thickness for the two wedges, checking for tilt along
 the y-axis (NEMA MS-5 2018: Equation 6) and calculation of the mean is left
 to the caller.
@@ -109,6 +169,89 @@ print(result.bspline_transform_path)  # Same as registration_transform_path
 ```
 
 The `register_atlas` function returns a `RegistrationResult` containing paths to all output files. All outputs are saved in the `output_directory`.
+
+### Vial Statistics
+
+The vial statistics module provides a method for extracting SPIRIT vial values
+from a registered atlas and presenting a table of vial metadata and measurement
+statistics.
+
+```
+from pathlib import Path
+
+from spirit_phantom.core.vials import (
+    compute_vial_statistics_details,
+    print_vial_statistics_details_table,
+    save_vial_statistics_details_table,
+)
+
+detailed_rows = compute_vial_statistics_details(
+    registered_atlas_image_path=Path("registered_atlas.nii.gz"),
+    mri_scan_image_path=Path("scanner_image.nii.gz"),
+    erosion_voxels=0,
+)
+print_vial_statistics_details_table(rows=detailed_rows)
+save_vial_statistics_details_table(
+    rows=detailed_rows,
+    output_path=Path("vial_statistics_detailed.txt"),
+)
+```
+
+Eroding vial ROIs is usually beneficial because it reduces edge artefacts and
+registration boundary effects. The best value depends on your image resolution
+and analysis goal, so choose `erosion_voxels` based on your data.
+
+
+
+An example of the output is with no erosion:
+
+| Vial ID | Product Code | Description           | Mean Intensity | Stdev     | Number of Voxels |
+|---------|--------------|-----------------------|----------------|-----------|------------------|
+| A       | MNCL-0320    | 0.320mM Aqueous MnCl2 | 383.614261     | 77.880100 | 71875            |
+| B       | MNCL-0159    | 0.159mM Aqueous MnCl2 | 279.192702     | 57.907651 | 71748            |
+| C       | MNCL-0110    | 0.110mM Aqueous MnCl2 | 192.972366     | 40.317790 | 72267            |
+| D       | MNCL-0039    | 0.039mM Aqueous MnCl2 | 369.782298     | 63.996589 | 71290            |
+| E       | PVP-0050     | 5% Aqueous PVP NiCl2  | 198.488653     | 42.202034 | 22738            |
+| F       | PVP-0100     | 10% Aqueous PVP NiCl2 | 200.131383     | 37.887874 | 23009            |
+| G       | PVP-0150     | 15% Aqueous PVP NiCl2 | 368.268869     | 61.760893 | 23160            |
+| H       | PVP-0200     | 20% Aqueous PVP NiCl2 | 362.967385     | 64.678591 | 23149            |
+| I       | PVP-0250     | 25% Aqueous PVP NiCl2 | 380.053787     | 66.807876 | 22812            |
+| J       | PVP-0300     | 30% Aqueous PVP NiCl2 | 371.809641     | 66.445551 | 22799            |
+| K       | PVP-0400     | 40% Aqueous PVP NiCl2 | 277.656956     | 47.257150 | 22621            |
+| L       | PVP-0500     | 50% Aqueous PVP       | 282.064033     | 51.086179 | 22879            |
+| M       | MNCL-0078    | 0.078mM Aqueous MnCl2 | 341.567342     | 67.871481 | 24123            |
+| N       | MNCL-0110    | 0.110mM Aqueous MnCl2 | 308.490297     | 59.404350 | 23447            |
+| O       | MNCL-0480    | 0.480mM Aqueous MnCl2 | 397.452877     | 77.854880 | 23916            |
+| P       | MNCL-0039    | 0.039mM Aqueous MnCl2 | 195.410605     | 34.654564 | 22669            |
+| Q       | MNCL-0630    | 0.630mM Aqueous MnCl2 | 274.209387     | 51.286216 | 22456            |
+| R       | MNCL-0320    | 0.320mM Aqueous MnCl2 | 341.248839     | 57.818041 | 22826            |
+| S       | MNCL-0017    | 0.017mM Aqueous MnCl2 | 238.341952     | 45.232980 | 23012            |
+| T       | MNCL-0159    | 0.159mM Aqueous MnCl2 | 359.478665     | 73.337451 | 23881            |
+
+An example of the output is with `erosion_voxels=1`:
+
+| Vial ID | Product Code | Description           | Mean Intensity | Stdev     | Number of Voxels |
+|---------|--------------|-----------------------|----------------|-----------|------------------|
+| A       | MNCL-0320    | 0.320mM Aqueous MnCl2 | 407.986083     | 13.173449 | 42251            |
+| B       | MNCL-0159    | 0.159mM Aqueous MnCl2 | 297.407621     | 10.259056 | 42044            |
+| C       | MNCL-0110    | 0.110mM Aqueous MnCl2 | 205.565967     | 9.084624  | 42347            |
+| D       | MNCL-0039    | 0.039mM Aqueous MnCl2 | 388.539982     | 11.497023 | 42031            |
+| E       | PVP-0050     | 5% Aqueous PVP NiCl2  | 204.181276     | 22.335345 | 11579            |
+| F       | PVP-0100     | 10% Aqueous PVP NiCl2 | 204.625617     | 22.757468 | 11758            |
+| G       | PVP-0150     | 15% Aqueous PVP NiCl2 | 376.756788     | 37.117770 | 11969            |
+| H       | PVP-0200     | 20% Aqueous PVP NiCl2 | 372.564816     | 36.220253 | 11926            |
+| I       | PVP-0250     | 25% Aqueous PVP NiCl2 | 388.671666     | 40.846955 | 11668            |
+| J       | PVP-0300     | 30% Aqueous PVP NiCl2 | 381.078283     | 40.157710 | 11599            |
+| K       | PVP-0400     | 40% Aqueous PVP NiCl2 | 281.891059     | 31.866884 | 11520            |
+| L       | PVP-0500     | 50% Aqueous PVP       | 289.681632     | 27.082627 | 11738            |
+| M       | MNCL-0078    | 0.078mM Aqueous MnCl2 | 355.301416     | 28.396466 | 12574            |
+| N       | MNCL-0110    | 0.110mM Aqueous MnCl2 | 319.399306     | 32.319146 | 12096            |
+| O       | MNCL-0480    | 0.480mM Aqueous MnCl2 | 413.484241     | 36.169857 | 12469            |
+| P       | MNCL-0039    | 0.039mM Aqueous MnCl2 | 200.654553     | 18.833725 | 11530            |
+| Q       | MNCL-0630    | 0.630mM Aqueous MnCl2 | 281.663908     | 28.163795 | 11360            |
+| R       | MNCL-0320    | 0.320mM Aqueous MnCl2 | 351.518779     | 23.100912 | 11662            |
+| S       | MNCL-0017    | 0.017mM Aqueous MnCl2 | 244.778041     | 22.960382 | 11804            |
+| T       | MNCL-0159    | 0.159mM Aqueous MnCl2 | 373.729220     | 31.781529 | 12464            |
 
 ### Checkerboard visualisation
 
