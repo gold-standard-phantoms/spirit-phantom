@@ -231,7 +231,6 @@ def register(
         cli_user=True,
     )
 
-    print("Registration completed.")
     print(f"Output directory: {resolved_output_directory}")
     print(f"Registered atlas image: {registration_result.registered_image_path}")
     print(
