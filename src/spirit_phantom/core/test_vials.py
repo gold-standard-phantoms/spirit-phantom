@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import nibabel as nib
 import numpy as np
 import pytest
 
+from spirit_phantom import get_default_register_moving_image_path
 from spirit_phantom.core import vials as vials_module
 from spirit_phantom.core.vials import (
     _compute_vial_statistics,
@@ -317,3 +318,38 @@ def test_generate_dice_score_table_uses_manual_to_atlas_mapping(tmp_path: Path) 
     assert row_d["manual_label"] == 4
     assert row_d["atlas_label"] == 19
     assert row_d["dice_score"] == pytest.approx(expected_row_d_dice)
+
+
+def test_compute_vial_statistics_uses_real_atlas_data(tmp_path: Path) -> None:
+    """Load the project atlas NIfTI and verify known deterministic behaviour."""
+    atlas_path = get_default_register_moving_image_path()
+    atlas_image = cast("nib.Nifti1Image", nib.load(str(atlas_path)))
+    atlas_data = np.rint(np.asanyarray(atlas_image.dataobj)).astype(np.int16)
+
+    present_labels = tuple(
+        sorted(int(value) for value in np.unique(atlas_data) if value > 0)
+    )
+    assert present_labels, "Expected positive atlas labels in fixture."
+    labels_to_test = present_labels[: min(3, len(present_labels))]
+
+    mri_data = atlas_data.astype(np.float32) * 10.0
+    mri_path = tmp_path / "scanner_mock.nii.gz"
+    nib.save(nib.Nifti1Image(mri_data, atlas_image.affine), str(mri_path))
+
+    stats = _compute_vial_statistics(
+        registered_atlas_image_path=atlas_path,
+        mri_scan_image_path=mri_path,
+        labels=labels_to_test,
+        erosion_voxels=0,
+    )
+
+    for row in stats:
+        label = int(row[0])
+        mean_intensity = float(row[1])
+        std_intensity = float(row[2])
+        voxel_count = int(row[3])
+
+        assert label in labels_to_test
+        assert mean_intensity == pytest.approx(label * 10.0)
+        assert std_intensity == pytest.approx(0.0)
+        assert voxel_count > 0
