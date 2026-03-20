@@ -2,12 +2,18 @@
 
 The registration command defaults to a SPIRIT atlas image downloaded with
 `pooch` when a moving image is not provided explicitly.
+
+The ``analyse`` command group includes:
+
+- ``vial-measurements`` for per-vial intensity statistics.
+- ``dice`` for per-vial overlap scores between manual and atlas labels.
 """
 
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -148,6 +154,54 @@ def _generate_checkerboard_images(
         slice_indices=slice_indices,
     )
     print(f"Saved checkerboard images in: {registered_image_path.parent}")
+
+
+def _format_dice_score_rows_table(
+    *, rows: Sequence[dict[str, int | str | float]]
+) -> str:
+    """Format per-vial Dice score rows into a readable text table.
+
+    Args:
+        rows: Rows returned by ``generate_dice_score_table`` containing vial ID,
+            manual/atlas labels, Dice score, and voxel count fields.
+
+    Returns:
+        Table string suitable for command-line output.
+    """
+    headers = [
+        "vial_id",
+        "manual_label",
+        "atlas_label",
+        "dice_score",
+        "manual_voxels",
+        "atlas_voxels",
+        "intersection_voxels",
+    ]
+
+    def _cell_to_text(*, value: Any) -> str:
+        if isinstance(value, float):
+            return f"{value:.6f}"
+        return str(value)
+
+    table_rows = [
+        [_cell_to_text(value=row.get(header, "")) for header in headers] for row in rows
+    ]
+    all_rows = [headers, *table_rows]
+    column_widths = [
+        max(len(row[column_index]) for row in all_rows)
+        for column_index in range(len(headers))
+    ]
+
+    def _format_line(*, cells: list[str]) -> str:
+        return " | ".join(
+            cell.ljust(column_width)
+            for cell, column_width in zip(cells, column_widths, strict=True)
+        )
+
+    separator = "-+-".join("-" * width for width in column_widths)
+    lines = [_format_line(cells=headers), separator]
+    lines.extend(_format_line(cells=row) for row in table_rows)
+    return "\n".join(lines)
 
 
 @app.command()
@@ -300,6 +354,47 @@ def analyse_vial_measurements(
         output_directory=output_directory,
         save_results=output_directory is not None,
     )
+
+
+@analyse_app.command("dice")
+def analyse_dice(
+    manual_segmentation_image_path: Annotated[
+        Path,
+        typer.Argument(help="Path to the manual labelled segmentation image."),
+    ],
+    registered_atlas_image_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the registered atlas labelled segmentation image."
+        ),
+    ],
+) -> None:
+    """Compute and print a per-vial Dice score table.
+
+    Args:
+        manual_segmentation_image_path: Path to the manual labelled
+            segmentation where labels 1..20 map to vials A..T.
+        registered_atlas_image_path: Path to the registered atlas labelled
+            segmentation using configured atlas segment indices.
+    """
+    from spirit_phantom.core.vials import generate_dice_score_table  # noqa: PLC0415
+
+    if not manual_segmentation_image_path.exists():
+        msg = f"Manual segmentation file not found: {manual_segmentation_image_path}"
+        raise typer.BadParameter(msg)
+    if not registered_atlas_image_path.exists():
+        msg = f"Registered atlas file not found: {registered_atlas_image_path}"
+        raise typer.BadParameter(msg)
+
+    try:
+        rows = generate_dice_score_table(
+            manual_segmentation_image_path=manual_segmentation_image_path,
+            registered_atlas_image_path=registered_atlas_image_path,
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    print(_format_dice_score_rows_table(rows=rows))
 
 
 def main() -> None:
