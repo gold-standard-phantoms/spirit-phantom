@@ -13,6 +13,13 @@ from typing import NamedTuple
 
 import itk
 
+from spirit_phantom.core.registration_optimizations import (
+    AffineOverrides,
+    BSplineOverrides,
+    RegistrationOverrides,
+    RigidOverrides,
+)
+
 logger = logging.getLogger(__name__)
 # Filename constants for output files
 RIGID_PARAMETERS_IN_FILENAME = "Rigid_Parameters_In.txt"
@@ -101,22 +108,6 @@ def _get_parameter_file_path(filename: str) -> Path:
     return source_path
 
 
-# Load rigid parameters from file
-RIGID_PARAM_FILE = _get_parameter_file_path("parameters_Rigid.txt")
-RIGID_PARAM_OBJECT = itk.ParameterObject.New()
-RIGID_PARAM_OBJECT.ReadParameterFile(str(RIGID_PARAM_FILE))
-
-# Load affine parameters from file
-AFFINE_PARAM_FILE = _get_parameter_file_path("parameters_Affine.txt")
-AFFINE_PARAM_OBJECT = itk.ParameterObject.New()
-AFFINE_PARAM_OBJECT.ReadParameterFile(str(AFFINE_PARAM_FILE))
-
-# Load B-spline parameters from file
-BSPLINE_PARAM_FILE = _get_parameter_file_path("parameters_B_Spline.txt")
-BSPLINE_PARAM_OBJECT = itk.ParameterObject.New()
-BSPLINE_PARAM_OBJECT.ReadParameterFile(str(BSPLINE_PARAM_FILE))
-
-
 def _save_transform_to_file(
     transform_params: itk.ParameterObject,
     filename: Path,
@@ -162,10 +153,61 @@ def _save_transform_to_file(
     return filename
 
 
+def _load_stage_parameter_object(*, parameter_filename: str) -> itk.ParameterObject:
+    """Load a stage parameter object from a packaged/default parameter file.
+
+    Args:
+        parameter_filename: The registration parameter filename to load.
+
+    Returns:
+        A new parameter object loaded from the provided filename.
+    """
+    parameter_file = _get_parameter_file_path(parameter_filename)
+    parameter_object = itk.ParameterObject.New()
+    parameter_object.ReadParameterFile(str(parameter_file))
+    return parameter_object
+
+
+def _apply_parameter_overrides(
+    *,
+    parameter_object: itk.ParameterObject,
+    parameter_updates: dict[str, tuple[str, ...]],
+) -> itk.ParameterObject:
+    """Apply curated parameter overrides and return an updated object.
+
+    Args:
+        parameter_object: The loaded elastix parameter object.
+        parameter_updates: Mapping of elastix keys to tuple-formatted values.
+
+    Returns:
+        A new parameter object with the provided updates applied.
+
+    Raises:
+        ValueError: If an override key is not present in the default map.
+    """
+    if not parameter_updates:
+        return parameter_object
+
+    parameter_map = dict(parameter_object.GetParameterMap(0))
+    for parameter_name in parameter_updates:
+        if parameter_name not in parameter_map:
+            msg = (
+                f"Unknown elastix parameter override '{parameter_name}'. "
+                "Only curated known keys are allowed."
+            )
+            raise ValueError(msg)
+    parameter_map.update(parameter_updates)
+
+    updated_parameter_object = itk.ParameterObject.New()
+    updated_parameter_object.AddParameterMap(parameter_map)
+    return updated_parameter_object
+
+
 def _perform_rigid_registration(
     fixed_image: itk.Image,
     moving_image: itk.Image,
     save_path: Path,
+    overrides: RigidOverrides | None = None,
 ) -> _StageResult:
     """Perform rigid registration stage.
 
@@ -173,22 +215,32 @@ def _perform_rigid_registration(
         fixed_image: The fixed (target) image.
         moving_image: The moving (source) image to register.
         save_path: Path to directory for saving transform files.
+        overrides: Optional curated rigid-stage parameter overrides.
 
     Returns:
         _StageResult containing the registered image, transform, and all file paths.
     """
     logger.info("Perform rigid registration: start")
+    rigid_param_object = _load_stage_parameter_object(
+        parameter_filename="parameters_Rigid.txt"
+    )
+    rigid_param_object = _apply_parameter_overrides(
+        parameter_object=rigid_param_object,
+        parameter_updates=(
+            overrides.to_elastix_updates() if overrides is not None else {}
+        ),
+    )
 
     # Save the parameters used by elastix to perform the rigid transform
     parameters_path = save_path / RIGID_PARAMETERS_IN_FILENAME
-    RIGID_PARAM_OBJECT.WriteParameterFile(
-        RIGID_PARAM_OBJECT.GetParameterMap(0),
+    rigid_param_object.WriteParameterFile(
+        rigid_param_object.GetParameterMap(0),
         str(parameters_path),
     )
     rigid_image, rigid_transform = itk.elastix_registration_method(
         fixed_image,
         moving_image,
-        parameter_object=RIGID_PARAM_OBJECT,
+        parameter_object=rigid_param_object,
         log_to_console=False,
     )
 
@@ -216,6 +268,7 @@ def _perform_affine_registration(
     moving_image: itk.Image,
     initial_transform_file: Path,
     save_path: Path,
+    overrides: AffineOverrides | None = None,
 ) -> _StageResult:
     """Perform affine registration stage.
 
@@ -224,22 +277,32 @@ def _perform_affine_registration(
         moving_image: The moving (source) image to register.
         initial_transform_file: Path to the initial transform file (rigid).
         save_path: Path to directory for saving transform files.
+        overrides: Optional curated affine-stage parameter overrides.
 
     Returns:
         _StageResult containing the registered image, transform, and all file paths.
     """
     logger.info("Perform affine registration: start")
+    affine_param_object = _load_stage_parameter_object(
+        parameter_filename="parameters_Affine.txt"
+    )
+    affine_param_object = _apply_parameter_overrides(
+        parameter_object=affine_param_object,
+        parameter_updates=(
+            overrides.to_elastix_updates() if overrides is not None else {}
+        ),
+    )
     # Save the parameters used by elastix to perform the affine transform
     parameters_path = save_path / AFFINE_PARAMETERS_IN_FILENAME
-    AFFINE_PARAM_OBJECT.WriteParameterFile(
-        AFFINE_PARAM_OBJECT.GetParameterMap(0),
+    affine_param_object.WriteParameterFile(
+        affine_param_object.GetParameterMap(0),
         str(parameters_path),
     )
 
     affine_image, affine_transform = itk.elastix_registration_method(
         fixed_image,
         moving_image,
-        parameter_object=AFFINE_PARAM_OBJECT,
+        parameter_object=affine_param_object,
         initial_transform_parameter_file_name=str(initial_transform_file),
         log_to_console=False,
     )
@@ -268,6 +331,7 @@ def _perform_bspline_registration(
     moving_image: itk.Image,
     initial_transform_file: Path,
     save_path: Path,
+    overrides: BSplineOverrides | None = None,
 ) -> _StageResult:
     """Perform B-spline registration stage.
 
@@ -276,22 +340,32 @@ def _perform_bspline_registration(
         moving_image: The moving (source) image to register.
         initial_transform_file: Path to the initial transform file (affine).
         save_path: Path to directory for saving transform files.
+        overrides: Optional curated B-spline-stage parameter overrides.
 
     Returns:
         _StageResult containing the registered image, transform, and all file paths.
     """
     logger.info("Perform b-spline registration: start")
+    bspline_param_object = _load_stage_parameter_object(
+        parameter_filename="parameters_B_Spline.txt"
+    )
+    bspline_param_object = _apply_parameter_overrides(
+        parameter_object=bspline_param_object,
+        parameter_updates=(
+            overrides.to_elastix_updates() if overrides is not None else {}
+        ),
+    )
     # Save parameters used by elastix to perform the B-Spline transform
     parameters_path = save_path / BSPLINE_PARAMETERS_IN_FILENAME
-    BSPLINE_PARAM_OBJECT.WriteParameterFile(
-        BSPLINE_PARAM_OBJECT.GetParameterMap(0),
+    bspline_param_object.WriteParameterFile(
+        bspline_param_object.GetParameterMap(0),
         str(parameters_path),
     )
 
     bspline_image, bspline_transform = itk.elastix_registration_method(
         fixed_image,
         moving_image,
-        parameter_object=BSPLINE_PARAM_OBJECT,
+        parameter_object=bspline_param_object,
         initial_transform_parameter_file_name=str(initial_transform_file),
         log_to_console=False,
     )
@@ -321,6 +395,7 @@ def _register(
     fixed_image: itk.Image,
     moving_image: itk.Image,
     save_path: Path,
+    overrides: RegistrationOverrides | None = None,
 ) -> tuple[itk.Image, itk.ParameterObject, list[Path]]:
     """Private register method that makes use of the three stage methods.
 
@@ -332,6 +407,7 @@ def _register(
         fixed_image: The fixed (target) image.
         moving_image: The moving (source) image to register.
         save_path: Path to directory for saving transform files. Must be writable.
+        overrides: Optional curated stage-level parameter overrides.
 
     Returns:
         A tuple of (registered_image, transform, list of paths).
@@ -365,12 +441,25 @@ def _register(
         raise ValueError(msg)
 
     # Perform three-stage registration: rigid, affine, B-spline
-    rigid_result = _perform_rigid_registration(fixed_image, moving_image, save_path)
+    rigid_result = _perform_rigid_registration(
+        fixed_image=fixed_image,
+        moving_image=moving_image,
+        save_path=save_path,
+        overrides=overrides.RigidOverrides if overrides is not None else None,
+    )
     affine_result = _perform_affine_registration(
-        fixed_image, moving_image, rigid_result.transform_path, save_path
+        fixed_image=fixed_image,
+        moving_image=moving_image,
+        initial_transform_file=rigid_result.transform_path,
+        save_path=save_path,
+        overrides=overrides.AffineOverrides if overrides is not None else None,
     )
     bspline_result = _perform_bspline_registration(
-        fixed_image, moving_image, affine_result.transform_path, save_path
+        fixed_image=fixed_image,
+        moving_image=moving_image,
+        initial_transform_file=affine_result.transform_path,
+        save_path=save_path,
+        overrides=overrides.BSplineOverrides if overrides is not None else None,
     )
 
     # Load the composed transform from file (includes chain information via
@@ -396,6 +485,7 @@ def register_atlas(
     fixed_image: Path,
     output_directory: Path,
     cli_user: bool = False,
+    overrides: RegistrationOverrides | None = None,
 ) -> RegistrationResult:
     """Register the moving image to the fixed image using file paths.
 
@@ -412,6 +502,8 @@ def register_atlas(
         output_directory: Directory for all output files. Intermediate images,
             input parameters, and transform files will all be saved here.
         cli_user: Whether the function is being called from the CLI. If True, will print logging messages to the console.
+        overrides: Optional curated stage-level registration parameter overrides.
+            For each stage, only non-``None`` override values are applied.
 
     Returns:
         RegistrationResult containing paths to all output files including
@@ -449,20 +541,28 @@ def register_atlas(
         print("Performing rigid part of registration...")
     # Perform three-stage registration: rigid, affine, B-spline
     rigid_result = _perform_rigid_registration(
-        fixed_image_itk, moving_image_itk, output_directory
+        fixed_image=fixed_image_itk,
+        moving_image=moving_image_itk,
+        save_path=output_directory,
+        overrides=overrides.RigidOverrides if overrides is not None else None,
     )
     if cli_user:
         print("Performing affine part of registration...")
     affine_result = _perform_affine_registration(
-        fixed_image_itk, moving_image_itk, rigid_result.transform_path, output_directory
+        fixed_image=fixed_image_itk,
+        moving_image=moving_image_itk,
+        initial_transform_file=rigid_result.transform_path,
+        save_path=output_directory,
+        overrides=overrides.AffineOverrides if overrides is not None else None,
     )
     if cli_user:
         print("Performing B-spline part of registration...")
     bspline_result = _perform_bspline_registration(
-        fixed_image_itk,
-        moving_image_itk,
-        affine_result.transform_path,
-        output_directory,
+        fixed_image=fixed_image_itk,
+        moving_image=moving_image_itk,
+        initial_transform_file=affine_result.transform_path,
+        save_path=output_directory,
+        overrides=overrides.BSplineOverrides if overrides is not None else None,
     )
     if cli_user:
         print("Registration complete!")
