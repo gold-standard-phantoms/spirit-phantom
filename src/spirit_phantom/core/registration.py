@@ -32,6 +32,8 @@ RIGID_TRANSFORM_FILENAME = "Rigid_Transform.txt"
 AFFINE_TRANSFORM_FILENAME = "Affine_Transform.txt"
 BSPLINE_TRANSFORM_FILENAME = "BSpline_Transform.txt"
 TRANSFORMED_POINTS_FILENAME = "transformed_points.txt"
+DICE_SNAPSHOT_DIRECTORY_NAME = "snapshot"
+DICE_SCORE_TABLE_FILENAME = "dice_scores.txt"
 
 
 class RegistrationResult(NamedTuple):
@@ -580,3 +582,73 @@ def register_atlas(
         registered_image_path=bspline_result.image_path,
         registration_transform_path=bspline_result.transform_path,
     )
+
+
+def compute_registration_cost(
+    *,
+    moving_image: Path,
+    fixed_image: Path,
+    output_directory: Path,
+    manual_segmentation_image_path: Path,
+    cli_user: bool = False,
+    overrides: RegistrationOverrides | None = None,
+) -> float:
+    """Run registration, snapshot Dice results, and return Generalised Dice Overlap.
+
+    The function executes full atlas registration using ``register_atlas``,
+    computes per-vial Dice scores against a manual segmentation, writes a
+    human-readable Dice table to ``output_directory/snapshot/dice_scores.txt``,
+    and then derives the aggregate Generalised Dice Overlap (GDO).
+
+    Args:
+        moving_image: Path to the moving (source) image file to register.
+        fixed_image: Path to the fixed (target) reference image file.
+        output_directory: Directory for registration outputs.
+        manual_segmentation_image_path: Path to manual segmentation NIfTI
+            aligned with the fixed image space.
+        cli_user: Whether the function is called from CLI context.
+        overrides: Optional curated stage-level registration parameter overrides.
+
+    Returns:
+        Generalised Dice Overlap computed from per-vial overlaps.
+
+    Raises:
+        FileNotFoundError: If the manual segmentation file does not exist.
+        OSError: If output files cannot be written.
+        ValueError: If Dice calculation inputs are incompatible.
+    """
+    if not manual_segmentation_image_path.exists():
+        msg = f"Manual segmentation file not found: {manual_segmentation_image_path}"
+        raise FileNotFoundError(msg)
+
+    registration_result = register_atlas(
+        moving_image=moving_image,
+        fixed_image=fixed_image,
+        output_directory=output_directory,
+        cli_user=cli_user,
+        overrides=overrides,
+    )
+
+    # Import locally to avoid adding heavy dependencies during module import.
+    from spirit_phantom.core.vials import (  # noqa: PLC0415
+        compute_generalised_dice_overlap,
+        generate_dice_score_table,
+        save_dice_score_table,
+    )
+
+    dice_rows = generate_dice_score_table(
+        manual_segmentation_image_path=manual_segmentation_image_path,
+        registered_atlas_image_path=registration_result.registered_image_path,
+    )
+    gdo_score = compute_generalised_dice_overlap(rows=dice_rows)
+
+    snapshot_directory = output_directory / DICE_SNAPSHOT_DIRECTORY_NAME
+    score_table_path = save_dice_score_table(
+        rows=dice_rows,
+        output_path=snapshot_directory / DICE_SCORE_TABLE_FILENAME,
+    )
+    with score_table_path.open(mode="a", encoding="utf-8") as table_file:
+        table_file.write("\n")
+        table_file.write(f"Generalised Dice Overlap: {gdo_score:.6f}\n")
+
+    return gdo_score

@@ -49,6 +49,27 @@ class AffineOverrides(_BaseStageOverrides):
 class BSplineOverrides(_BaseStageOverrides):
     """Curated overrides for the B-spline registration stage."""
 
+    FinalGridSpacingInPhysicalUnits: float | None = None
+
+    def to_elastix_updates(self) -> dict[str, tuple[str, ...]]:
+        """Build B-spline parameter updates in elastix map format.
+
+        Returns:
+            A mapping from elastix parameter name to tuple-based values.
+
+        Raises:
+            ValueError: If any provided override value is invalid.
+        """
+        updates = _BaseStageOverrides.to_elastix_updates(self)
+        if self.FinalGridSpacingInPhysicalUnits is not None:
+            if self.FinalGridSpacingInPhysicalUnits <= 0.0:
+                msg = "FinalGridSpacingInPhysicalUnits must be a positive value."
+                raise ValueError(msg)
+            updates["FinalGridSpacingInPhysicalUnits"] = (
+                str(self.FinalGridSpacingInPhysicalUnits),
+            )
+        return updates
+
 
 @dataclass(slots=True)
 class RegistrationOverrides:

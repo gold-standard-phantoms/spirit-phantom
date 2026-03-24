@@ -10,8 +10,13 @@ from typing import NamedTuple
 
 import itk
 import numpy as np
+import pytest
 
-from spirit_phantom.core.registration import _register
+from spirit_phantom.core.registration import (
+    RegistrationResult,
+    _register,
+    compute_registration_cost,
+)
 
 TOLERANCE_POINT_TRANSFORMATION = 2.0
 DICE_SCORE_THRESHOLD = 0.9
@@ -76,3 +81,73 @@ def test_registration() -> None:
         assert dice_moving_to_fixed > DICE_SCORE_THRESHOLD, (
             f"Moving to fixed registration failed with Dice score: {dice_moving_to_fixed}"
         )
+
+
+def test_compute_registration_cost_writes_snapshot_and_returns_gdo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Write Dice snapshot artefact and return computed GDO."""
+    output_directory = tmp_path / "registration_output"
+    registered_image_path = output_directory / "Bspline_Image.nii.gz"
+    manual_segmentation_image_path = tmp_path / "manual_segmentation.nii.gz"
+    moving_image_path = tmp_path / "moving.nii.gz"
+    fixed_image_path = tmp_path / "fixed.nii.gz"
+
+    for path in (manual_segmentation_image_path, moving_image_path, fixed_image_path):
+        path.write_text("placeholder", encoding="utf-8")
+
+    def _fake_register_atlas(**_: object) -> RegistrationResult:
+        output_directory.mkdir(parents=True, exist_ok=True)
+        registered_image_path.write_text("registered", encoding="utf-8")
+        return RegistrationResult(
+            rigid_image_path=output_directory / "Rigid_Image.nii.gz",
+            affine_image_path=output_directory / "Affine_Image.nii.gz",
+            bspline_image_path=registered_image_path,
+            rigid_parameters_path=output_directory / "Rigid_Parameters_In.txt",
+            affine_parameters_path=output_directory / "Affine_Parameters_In.txt",
+            bspline_parameters_path=output_directory / "BSpline_Parameters_In.txt",
+            rigid_transform_path=output_directory / "Rigid_Transform.txt",
+            affine_transform_path=output_directory / "Affine_Transform.txt",
+            bspline_transform_path=output_directory / "BSpline_Transform.txt",
+            registered_image_path=registered_image_path,
+            registration_transform_path=output_directory / "BSpline_Transform.txt",
+        )
+
+    monkeypatch.setattr(
+        "spirit_phantom.core.registration.register_atlas",
+        _fake_register_atlas,
+    )
+
+    fake_rows = [
+        {
+            "vial_id": "A",
+            "manual_label": 1,
+            "atlas_label": 17,
+            "dice_score": 0.8,
+            "manual_voxels": 100,
+            "atlas_voxels": 100,
+            "intersection_voxels": 80,
+        }
+    ]
+    monkeypatch.setattr(
+        "spirit_phantom.core.vials.generate_dice_score_table",
+        lambda **_: fake_rows,
+    )
+    monkeypatch.setattr(
+        "spirit_phantom.core.vials.compute_generalised_dice_overlap",
+        lambda **_: 0.8,
+    )
+
+    gdo = compute_registration_cost(
+        moving_image=moving_image_path,
+        fixed_image=fixed_image_path,
+        output_directory=output_directory,
+        manual_segmentation_image_path=manual_segmentation_image_path,
+    )
+
+    assert gdo == pytest.approx(0.8)
+    table_path = output_directory / "snapshot" / "dice_scores.txt"
+    assert table_path.exists()
+    table_content = table_path.read_text(encoding="utf-8")
+    assert "Generalised Dice Overlap: 0.800000" in table_content
