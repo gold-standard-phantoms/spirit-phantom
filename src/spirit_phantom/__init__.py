@@ -13,13 +13,13 @@ import pooch
 
 DEFAULT_REGISTER_MOVING_IMAGE_URL = (
     "https://raw.githubusercontent.com/gold-standard-phantoms/public-data/"
-    "e01d6b8e642e679257aa1d6c42816754bc2cc228/phantoms/SPIRIT/atlas/"
-    "spirit_issue1.0_vx0.25_sub1.nii.gz"
+    "0be968dfe798059121260b1507edf3face462b48/phantoms/SPIRIT/atlas/"
+    "spirit_issue1.0_vx0.25_sub2.nii.gz"
 )
 # Pinned URL for the default SPIRIT atlas (moving image).
 
 DEFAULT_REGISTER_MOVING_IMAGE_KNOWN_HASH: str | None = (
-    "sha256:77f027524325c4ad4d2d23ee8c224dfd04080216531c309d93e9fe41d686739d"
+    "sha256:5d0614d32ec6c5b638db9b0f5e3a67d2e34765f5974d5a3568d5d9378e93ded0"
 )
 # Expected SHA-256 for the default SPIRIT atlas.
 # If you need to update the atlas, update both the URL and this hash.
