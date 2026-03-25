@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING, Literal, cast
 if TYPE_CHECKING:
     from pathlib import Path
 
-from spirit_phantom.io.points import load_points, save_points
+import pytest
+
+from spirit_phantom.io.points import load_points, parse_transformix_output, save_points
 
 PointType = Literal["point", "index"]
 
@@ -84,4 +86,63 @@ def test_save_and_load_points_and_index(tmp_path: Path) -> None:
             dims=dims,
             filename=filename,
             rng=rng,
+        )
+
+
+def test_parse_transformix_output_reads_output_point_for_point_type(
+    tmp_path: Path,
+) -> None:
+    """Parse transformed physical points from transformix output."""
+    output_path = tmp_path / "outputpoints.txt"
+    output_path.write_text(
+        "\n".join(
+            (
+                "Point 0 ; InputPoint = [ 1.0 2.0 ] ; OutputPoint = [ 3.5 4.5 ] ;",
+                "Point 1 ; InputPoint = [ 5.0 6.0 ] ; OutputPoint = [ 7.5 8.5 ] ;",
+            ),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    parsed = parse_transformix_output(output_path=output_path, point_type="point")
+
+    assert parsed == [[3.5, 4.5], [7.5, 8.5]]
+
+
+def test_parse_transformix_output_reads_output_index_moving_for_index_type(
+    tmp_path: Path,
+) -> None:
+    """Parse transformed voxel indices from transformix output."""
+    output_path = tmp_path / "outputpoints.txt"
+    output_path.write_text(
+        "\n".join(
+            (
+                "Point 0 ; OutputPoint = [ 9.9 9.9 ] ; OutputIndexMoving = [ 10 20 ] ;",
+                "Point 1 ; OutputPoint = [ 8.8 8.8 ] ; OutputIndexMoving = [ 30 40 ] ;",
+            ),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    parsed = parse_transformix_output(output_path=output_path, point_type="index")
+
+    assert parsed == [[10.0, 20.0], [30.0, 40.0]]
+
+
+def test_parse_transformix_output_rejects_unsupported_point_type(
+    tmp_path: Path,
+) -> None:
+    """Raise an error for unsupported point type values."""
+    output_path = tmp_path / "outputpoints.txt"
+    output_path.write_text(
+        "Point 0 ; OutputPoint = [ 1.0 2.0 ] ;\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Unsupported point_type"):
+        parse_transformix_output(
+            output_path=output_path,
+            point_type=cast("PointType", "unsupported"),
         )

@@ -13,7 +13,10 @@ Transformix format:
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    import numpy as np
 
 # Supported dimensions for point transformations
 DIM_2D = 2
@@ -183,11 +186,16 @@ def save_points(
             f.write(f"{coords_str}\n")
 
 
-def parse_transformix_output(output_path: Path) -> list[list[float]]:
+def parse_transformix_output(
+    output_path: Path, point_type: _PointType = "point"
+) -> list[list[float]]:
     """Parse transformed points from transformix output file.
 
     Args:
         output_path: Path to the transformix outputpoints.txt file.
+        point_type: Indicates whether to parse transformed physical points
+            (``"point"`` from ``OutputPoint``) or transformed voxel indices
+            (``"index"`` from ``OutputIndexMoving``).
 
     Returns:
         List of transformed point coordinates, each point is a list of floats.
@@ -203,28 +211,34 @@ def parse_transformix_output(output_path: Path) -> list[list[float]]:
         )
         raise FileNotFoundError(msg)
 
+    if point_type not in ("point", "index"):
+        msg = f"Unsupported point_type: {point_type}. Expected 'point' or 'index'."
+        raise ValueError(msg)
+
     transformed_points: list[list[float]] = []
-    output_point_marker = "OutputPoint = ["
+    output_marker = (
+        "OutputPoint = [" if point_type == "point" else "OutputIndexMoving = ["
+    )
 
     with output_path.open("r", encoding="utf-8") as f:
         for line_num, line in enumerate(f, start=1):
-            if "OutputPoint" not in line:
+            if output_marker.split("=", maxsplit=1)[0].strip() not in line:
                 continue
 
-            output_start = line.find(output_point_marker)
+            output_start = line.find(output_marker)
             if output_start == -1:
                 msg = (
                     f"Malformed transformix output at line {line_num}: "
-                    f"found 'OutputPoint' but missing '{output_point_marker}'"
+                    f"found expected output field but missing '{output_marker}'"
                 )
                 raise ValueError(msg)
 
-            output_start += len(output_point_marker)
+            output_start += len(output_marker)
             output_end = line.find("]", output_start)
             if output_end == -1:
                 msg = (
                     f"Malformed transformix output at line {line_num}: "
-                    "missing closing bracket ']' for OutputPoint"
+                    f"missing closing bracket ']' for '{output_marker}'"
                 )
                 raise ValueError(msg)
 
@@ -252,3 +266,37 @@ def parse_transformix_output(output_path: Path) -> list[list[float]]:
             transformed_points.append(coords)
 
     return transformed_points
+
+
+def transform_points_fixed_to_moving(
+    moving_image_path: Path,
+    registration_transform_path: Path,
+    points_in_fixed_domain_path: Path,
+    save_path: Path | None = None,
+    *,
+    log_to_console: bool = False,
+) -> "np.ndarray":
+    """Re-export point transform utility from ``point_transforms``.
+
+    Args:
+        moving_image_path: Path to the moving image.
+        registration_transform_path: Path to the registration transform.
+        points_in_fixed_domain_path: Path to points in the fixed domain.
+        save_path: Optional path to save transformed points artefacts.
+        log_to_console: Whether to log transformix output to the console.
+
+    Returns:
+        Numpy array of transformed points with shape ``[n_points, n_dims]``.
+    """
+    # Import locally to avoid an import cycle: point_transforms imports this module.
+    from spirit_phantom.io.point_transforms import (  # noqa: PLC0415
+        transform_points_fixed_to_moving as _transform_points_fixed_to_moving,
+    )
+
+    return _transform_points_fixed_to_moving(
+        moving_image_path=moving_image_path,
+        registration_transform_path=registration_transform_path,
+        points_in_fixed_domain_path=points_in_fixed_domain_path,
+        save_path=save_path,
+        log_to_console=log_to_console,
+    )
