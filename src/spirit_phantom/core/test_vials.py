@@ -11,13 +11,17 @@ import pytest
 from spirit_phantom import get_default_register_moving_image_path
 from spirit_phantom.core import vials as vials_module
 from spirit_phantom.core.vials import (
+    DiceScoreRow,
     _compute_vial_statistics,
+    compute_generalised_dice_overlap,
     compute_vial_statistics_details,
+    format_dice_score_table,
     format_vial_statistics_details_table,
     format_vial_statistics_table,
     generate_dice_score_table,
     print_vial_statistics_details_table,
     print_vial_statistics_table,
+    save_dice_score_table,
     save_vial_statistics_details_table,
     save_vial_statistics_table,
 )
@@ -318,6 +322,90 @@ def test_generate_dice_score_table_uses_manual_to_atlas_mapping(tmp_path: Path) 
     assert row_d["manual_label"] == 4
     assert row_d["atlas_label"] == 19
     assert row_d["dice_score"] == pytest.approx(expected_row_d_dice)
+
+
+def test_format_dice_score_table_renders_expected_layout() -> None:
+    """Format Dice rows into a deterministic table string."""
+    rows: list[DiceScoreRow] = [
+        DiceScoreRow(
+            vial_id="A",
+            manual_label=1,
+            atlas_label=17,
+            dice_score=1.0,
+            manual_voxels=27,
+            atlas_voxels=27,
+            intersection_voxels=27,
+        ),
+        DiceScoreRow(
+            vial_id="B",
+            manual_label=2,
+            atlas_label=18,
+            dice_score=float("nan"),
+            manual_voxels=0,
+            atlas_voxels=0,
+            intersection_voxels=0,
+        ),
+    ]
+
+    table = format_dice_score_table(rows=rows)
+    assert table
+    assert "Vial ID" in table
+    assert "A" in table
+    assert "1.000000" in table
+    assert "nan" in table
+
+
+def test_save_dice_score_table_writes_expected_content(tmp_path: Path) -> None:
+    """Save the Dice score table and return output path."""
+    rows: list[DiceScoreRow] = [
+        DiceScoreRow(
+            vial_id="A",
+            manual_label=1,
+            atlas_label=17,
+            dice_score=0.5,
+            manual_voxels=8,
+            atlas_voxels=4,
+            intersection_voxels=3,
+        )
+    ]
+    output_path = tmp_path / "snapshot" / "dice_scores.txt"
+
+    returned_path = save_dice_score_table(rows=rows, output_path=output_path)
+
+    assert returned_path == output_path
+    assert output_path.exists()
+    expected_content = f"{format_dice_score_table(rows=rows)}\n"
+    assert output_path.read_text(encoding="utf-8") == expected_content
+
+
+def test_compute_generalised_dice_overlap_matches_weighted_definition() -> None:
+    """Compute GDO with inverse-volume weighting across classes."""
+    rows: list[DiceScoreRow] = [
+        DiceScoreRow(
+            vial_id="A",
+            manual_label=1,
+            atlas_label=17,
+            dice_score=0.8,
+            manual_voxels=100,
+            atlas_voxels=100,
+            intersection_voxels=80,
+        ),
+        DiceScoreRow(
+            vial_id="B",
+            manual_label=2,
+            atlas_label=18,
+            dice_score=0.5,
+            manual_voxels=10,
+            atlas_voxels=10,
+            intersection_voxels=5,
+        ),
+    ]
+
+    gdo = compute_generalised_dice_overlap(rows=rows)
+    expected = (2.0 * ((1.0 / 200.0) * 80.0 + (1.0 / 20.0) * 5.0)) / (
+        (1.0 / 200.0) * 200.0 + (1.0 / 20.0) * 20.0
+    )
+    assert gdo == pytest.approx(expected)
 
 
 def test_compute_vial_statistics_uses_real_atlas_data(tmp_path: Path) -> None:

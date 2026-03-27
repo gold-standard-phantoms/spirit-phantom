@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 from math import isnan
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import TYPE_CHECKING, Any, TextIO, TypedDict
 
 import itk
 import numpy as np
@@ -53,6 +53,18 @@ BoolArray = NDArray[np.bool_]
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int32]
 VialStatisticRow = list[float | int]
+
+
+class DiceScoreRow(TypedDict):
+    """Typed row representation for per-vial Dice outputs."""
+
+    vial_id: str
+    manual_label: int
+    atlas_label: int
+    dice_score: float
+    manual_voxels: int
+    atlas_voxels: int
+    intersection_voxels: int
 
 
 class DetailedVialStatistic(BaseModel):
@@ -538,7 +550,7 @@ def generate_dice_score_table(
     *,
     manual_segmentation_image_path: Path,
     registered_atlas_image_path: Path,
-) -> list[dict[str, int | str | float]]:
+) -> list[DiceScoreRow]:
     """Generate per-vial Dice scores using manual-to-atlas vial remapping.
 
     The manual segmentation labels are expected to use vial order A..T as
@@ -586,7 +598,7 @@ def generate_dice_score_table(
         )
         raise ValueError(msg)
 
-    rows: list[dict[str, int | str | float]] = []
+    rows: list[DiceScoreRow] = []
     for manual_label in DEFAULT_VIAL_LABELS:
         configuration = ordered_configurations[manual_label - 1]
         atlas_label = int(configuration.segment_index)
@@ -605,15 +617,118 @@ def generate_dice_score_table(
         )
 
         rows.append(
-            {
-                "vial_id": configuration.vial_id,
-                "manual_label": manual_label,
-                "atlas_label": atlas_label,
-                "dice_score": dice_score,
-                "manual_voxels": manual_voxels,
-                "atlas_voxels": atlas_voxels,
-                "intersection_voxels": intersection_voxels,
-            }
+            DiceScoreRow(
+                vial_id=configuration.vial_id,
+                manual_label=manual_label,
+                atlas_label=atlas_label,
+                dice_score=dice_score,
+                manual_voxels=manual_voxels,
+                atlas_voxels=atlas_voxels,
+                intersection_voxels=intersection_voxels,
+            )
         )
 
     return rows
+
+
+def format_dice_score_table(*, rows: Sequence[DiceScoreRow]) -> str:
+    """Format Dice score rows as a neat table-like string.
+
+    Args:
+        rows: Dice score rows from ``generate_dice_score_table``.
+
+    Returns:
+        Multi-line table string suitable for CLI output and snapshots.
+    """
+    headers = (
+        "Vial ID",
+        "Manual label",
+        "Atlas label",
+        "Dice score",
+        "Manual voxels",
+        "Atlas voxels",
+        "Intersection voxels",
+    )
+    table_rows = [
+        (
+            row["vial_id"],
+            str(int(row["manual_label"])),
+            str(int(row["atlas_label"])),
+            _format_float_cell(value=float(row["dice_score"])),
+            str(int(row["manual_voxels"])),
+            str(int(row["atlas_voxels"])),
+            str(int(row["intersection_voxels"])),
+        )
+        for row in rows
+    ]
+
+    if not table_rows:
+        return "No Dice scores were returned."
+
+    column_widths: list[int] = []
+    for index in range(len(headers)):
+        header_width = len(headers[index])
+        row_widths = (len(row[index]) for row in table_rows)
+        column_widths.append(max(header_width, *row_widths))
+
+    def _format_line(*, cells: tuple[str, str, str, str, str, str, str]) -> str:
+        return " | ".join(
+            cells[index].ljust(column_widths[index]) for index in range(len(cells))
+        )
+
+    separator = "-+-".join("-" * width for width in column_widths)
+    lines = [_format_line(cells=headers), separator]
+    lines.extend(_format_line(cells=row) for row in table_rows)
+    return "\n".join(lines)
+
+
+def save_dice_score_table(*, rows: Sequence[DiceScoreRow], output_path: Path) -> Path:
+    """Save formatted Dice scores as UTF-8 text.
+
+    Args:
+        rows: Dice score rows from ``generate_dice_score_table``.
+        output_path: Path to the output text file.
+
+    Returns:
+        The same ``output_path`` for convenient chaining.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    table_text = format_dice_score_table(rows=rows)
+    output_path.write_text(f"{table_text}\n", encoding="utf-8")
+    return output_path
+
+
+def compute_generalised_dice_overlap(*, rows: Sequence[DiceScoreRow]) -> float:
+    """Compute Generalised Dice Overlap from per-vial Dice components.
+
+    The implementation uses an inverse-frequency weighting:
+    ``w_i = 1 / (|X_i| + |Y_i|)`` when ``|X_i| + |Y_i| > 0``.
+    This gives smaller regions proportionally greater influence while avoiding
+    division-by-zero for absent classes.
+
+    Args:
+        rows: Dice score rows from ``generate_dice_score_table``.
+
+    Returns:
+        Generalised Dice Overlap in ``[0, 1]`` when data are present, otherwise
+        ``nan`` if all classes are empty in both segmentations.
+    """
+    weighted_intersection_sum = 0.0
+    weighted_volume_sum = 0.0
+
+    for row in rows:
+        manual_voxels = int(row["manual_voxels"])
+        atlas_voxels = int(row["atlas_voxels"])
+        intersection_voxels = int(row["intersection_voxels"])
+        class_volume = manual_voxels + atlas_voxels
+        if class_volume == 0:
+            continue
+
+        weight = 1.0 / float(class_volume)
+        weighted_intersection_sum += weight * float(intersection_voxels)
+        weighted_volume_sum += weight * float(class_volume)
+
+    if weighted_volume_sum == 0.0:
+        return float("nan")
+
+    return float((2.0 * weighted_intersection_sum) / weighted_volume_sum)
