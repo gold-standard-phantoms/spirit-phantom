@@ -56,6 +56,7 @@ The CLI supports both atomic and combined workflows:
 
 - Register once, then run one or more analysis commands.
 - Register and immediately run analysis in one command.
+- Run standalone analysis commands such as per-vial Dice scoring.
 
 Atomic registration:
 
@@ -99,6 +100,69 @@ uv run spirit-phantom analyse vial-measurements \
   --output-directory path/to/analysis_output
 ```
 
+Atomic Dice analysis (prints a per-vial table with label mapping and voxel overlap):
+
+```bash
+uv run spirit-phantom analyse dice \
+  path/to/manual_segmentation.nii.gz \
+  path/to/registration_output/Bspline_Image.nii.gz
+```
+
+Example command (Windows relative paths):
+
+```powershell
+uv run spirit-phantom analyse dice `
+  \path\to\manually\segmented\vials `
+  \path\to\registered\atlas `
+```
+
+Example output:
+
+```text
+vial_id | manual_label | atlas_label | dice_score | manual_voxels | atlas_voxels | intersection_voxels
+--------+--------------+-------------+------------+---------------+--------------+--------------------
+A       | 1            | 17          | 0.953306   | 71937         | 68809        | 67087
+B       | 2            | 18          | 0.935174   | 72022         | 67798        | 65378
+C       | 3            | 20          | 0.883508   | 83733         | 66706        | 66457
+D       | 4            | 19          | 0.912901   | 79834         | 67952        | 67457
+E       | 5            | 11          | 0.793889   | 31786         | 21884        | 21304
+F       | 6            | 14          | 0.745040   | 28619         | 23099        | 19266
+G       | 7            | 13          | 0.850703   | 26287         | 22696        | 20835
+H       | 8            | 10          | 0.805932   | 26067         | 22751        | 19672
+I       | 9            | 6           | 0.871800   | 25312         | 22582        | 20877
+J       | 10           | 3           | 0.868149   | 21747         | 23577        | 19674
+K       | 11           | 4           | 0.874160   | 28492         | 23153        | 22573
+L       | 12           | 7           | 0.779448   | 25042         | 23128        | 18773
+M       | 13           | 12          | 0.922296   | 21461         | 23067        | 20534
+N       | 14           | 16          | 0.886580   | 25631         | 23064        | 21586
+O       | 15           | 15          | 0.889272   | 24369         | 22656        | 20909
+P       | 16           | 9           | 0.785631   | 27937         | 21529        | 19431
+Q       | 17           | 5           | 0.841078   | 27870         | 21607        | 20807
+R       | 18           | 1           | 0.886068   | 24611         | 22110        | 20699
+S       | 19           | 2           | 0.857560   | 28164         | 22510        | 21728
+T       | 20           | 8           | 0.883388   | 25756         | 21752        | 20984
+```
+
+The `analyse dice` command expects:
+
+- A manual segmentation where labels `1..20` represent vials `A..T`.
+- A registered atlas segmentation aligned to the same shape.
+
+The output table includes:
+
+- `vial_id`, `manual_label`, `atlas_label`
+- `dice_score`
+- `manual_voxels`, `atlas_voxels`, `intersection_voxels`
+
+Interpretation notes:
+
+- `dice_score` ranges from `0` (no overlap) to `1` (perfect overlap).
+- `manual_label` and `atlas_label` show which connected components were matched for each vial.
+- `intersection_voxels` is the overlap used in the Dice calculation.
+- A lower Dice score with large voxel count differences can indicate local misregistration or segmentation mismatch.
+
+If the two images have different shapes, the command exits with a clear validation error.
+
 Combined workflow (register and then run vial measurements):
 
 ```bash
@@ -112,6 +176,8 @@ uv run spirit-phantom register \
 In the combined case, detailed vial statistics are saved automatically to:
 
 `path/to/registration_output/vial_statistics_details.txt`
+
+### Slice Thickness
 
 The NEMA MS-5 2018 slice thickness function will be used as an example. 
 The spirit-phantom function expects a numpy array for the wedge ROI ordered 
