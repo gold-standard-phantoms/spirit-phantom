@@ -11,6 +11,7 @@
 (MaximumNumberOfIterations 1000)
 (MaximumNumberOfSamplingAttempts 8)
 (Metric "AdvancedMattesMutualInformation")
+(NumberOfHistogramBins 16)
 (MovingImagePyramid "MovingSmoothingImagePyramid")
 (NewSamplesEveryIteration "true")
 (NumberOfResolutions 3)
