@@ -157,7 +157,7 @@ def _save_transform_to_file(
 
     param_obj = itk.ParameterObject.New()
     param_obj.AddParameterMap(transform_map)
-    param_obj.WriteParameterFile(param_obj.GetParameterMap(0), str(filename))
+    param_obj.WriteParameterFile(str(filename))
 
     return filename
 
@@ -181,10 +181,7 @@ def _perform_rigid_registration(
 
     # Save the parameters used by elastix to perform the rigid transform
     parameters_path = save_path / RIGID_PARAMETERS_IN_FILENAME
-    RIGID_PARAM_OBJECT.WriteParameterFile(
-        RIGID_PARAM_OBJECT.GetParameterMap(0),
-        str(parameters_path),
-    )
+    RIGID_PARAM_OBJECT.WriteParameterFile(str(parameters_path))
     rigid_image, rigid_transform = itk.elastix_registration_method(
         fixed_image,
         moving_image,
@@ -231,10 +228,7 @@ def _perform_affine_registration(
     logger.info("Perform affine registration: start")
     # Save the parameters used by elastix to perform the affine transform
     parameters_path = save_path / AFFINE_PARAMETERS_IN_FILENAME
-    AFFINE_PARAM_OBJECT.WriteParameterFile(
-        AFFINE_PARAM_OBJECT.GetParameterMap(0),
-        str(parameters_path),
-    )
+    AFFINE_PARAM_OBJECT.WriteParameterFile(str(parameters_path))
 
     affine_image, affine_transform = itk.elastix_registration_method(
         fixed_image,
@@ -283,10 +277,7 @@ def _perform_bspline_registration(
     logger.info("Perform b-spline registration: start")
     # Save parameters used by elastix to perform the B-Spline transform
     parameters_path = save_path / BSPLINE_PARAMETERS_IN_FILENAME
-    BSPLINE_PARAM_OBJECT.WriteParameterFile(
-        BSPLINE_PARAM_OBJECT.GetParameterMap(0),
-        str(parameters_path),
-    )
+    BSPLINE_PARAM_OBJECT.WriteParameterFile(str(parameters_path))
 
     bspline_image, bspline_transform = itk.elastix_registration_method(
         fixed_image,
