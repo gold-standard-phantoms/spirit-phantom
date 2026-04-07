@@ -326,17 +326,17 @@ wheels = [
 
 [[package]]
 name = "itk-elastix"
-version = "0.23.0"
+version = "0.25.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "itk" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/ca/f91ca4c037fac506f45270c3d09aa96ce0feffc0f6ef418cae14d8e7c366/itk_elastix-0.23.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:baaf61a1adcaf2225ccfc2a40a259b82005b37541ec7000070b9c35fdf6ccc8f", size = 13215551, upload-time = "2025-04-15T10:54:10.147Z" },
-    { url = "https://files.pythonhosted.org/packages/a1/07/218fa776e4ffa6083cce8acd584c20f01e3a2acff5e0946024039b8bad44/itk_elastix-0.23.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b529f17f8f97c22575dbe9ad5987b2bba47999bbfe8ea391dace018e351d2164", size = 21150061, upload-time = "2025-04-15T10:54:12.557Z" },
-    { url = "https://files.pythonhosted.org/packages/54/19/5f8c9ebd49b7cb00bea7012c5469cdf885af232d37777947614a596ebdd5/itk_elastix-0.23.0-cp311-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:b37a5a767655089ae6d941ec223e39c96dfbe79a790fdfe8045f91d81cf17244", size = 19548452, upload-time = "2025-04-15T10:54:15.019Z" },
-    { url = "https://files.pythonhosted.org/packages/c5/46/a8aab730d8d75ccaf155be543e2e314fcf87fc6272f5abe19f1565f78a20/itk_elastix-0.23.0-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:9b1befecc1d3d8c911913a9eecf946cb977abcc9558bd2e51ae7095e636dcb0c", size = 21382392, upload-time = "2025-04-15T10:54:17.139Z" },
-    { url = "https://files.pythonhosted.org/packages/b6/79/7937004d1a2a875bb9360280d5b6922b28af8e671904cd8d94c8e679f374/itk_elastix-0.23.0-cp311-abi3-win_amd64.whl", hash = "sha256:b96120d7402e3550db2a686f3af21034bb60ea67df45185e5f6021b9491ed60d", size = 7749495, upload-time = "2025-04-15T10:54:19.148Z" },
+    { url = "https://files.pythonhosted.org/packages/48/6d/b3ce641e7c4becc18ca12397c8cf364fd1c2fdfcba8f7e63a670015f01c9/itk_elastix-0.25.2-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:7fbd21c93348a76f7eb5661a4395afbcdd07fcd243d1418f219d8641b00c5da3", size = 11811562, upload-time = "2026-03-24T18:33:36.776Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/de/5fb3f327d1680e71d4c8d166235a38330d906ec9ed25db5115182d8edc8a/itk_elastix-0.25.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:071d6c7235b7031534ff59020fb15e9f268b5be5bc9fc951ed66fc4941bb433a", size = 21217458, upload-time = "2026-03-24T18:33:39.417Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/a0/35554edc2e136476a6b76331c0fc4956b1fd3686b6beacb14da5933d73d6/itk_elastix-0.25.2-cp311-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:546e0379341e41e77e22a4911a961c6be77a988e7b6a875737c17c64f63933b1", size = 19597866, upload-time = "2026-03-24T18:33:42.074Z" },
+    { url = "https://files.pythonhosted.org/packages/34/34/cbaed9a1547acf758d62f739564f75b4f703124b875fd81be9f55e8da9a4/itk_elastix-0.25.2-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:2ccb020e952db4a29c1a3c49a02b9ea489307390a7fe351dbd84b962d9d16c17", size = 21441675, upload-time = "2026-03-24T18:33:44.789Z" },
+    { url = "https://files.pythonhosted.org/packages/05/51/481691dd467ca53ee1da92e333a7350c8160b6ee47b025209ab80a01db0e/itk_elastix-0.25.2-cp311-abi3-win_amd64.whl", hash = "sha256:6afdd7cbbd5357313852917f3f5daba68c2ba9ecda2d9a7d9619394fb7133849", size = 7867555, upload-time = "2026-03-24T18:33:47.08Z" },
 ]
 
 [[package]]
@@ -1271,7 +1271,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "itk-elastix", specifier = ">=0.23.0" },
+    { name = "itk-elastix", specifier = ">=0.25.2" },
     { name = "numpy", specifier = ">=2.3.5" },
     { name = "pooch", specifier = ">=1.8.2" },
     { name = "pydantic", specifier = ">=2.11.9" },
