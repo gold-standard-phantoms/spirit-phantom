@@ -10,7 +10,7 @@ The ``analyse`` command group includes:
 """
 
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
@@ -36,7 +36,7 @@ def _build_timestamped_output_directory() -> Path:
     Returns:
         Path to the created directory.
     """
-    timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")  # noqa: UP017
+    timestamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
     output_directory = Path.cwd() / "registered_data" / timestamp
     output_directory.mkdir(parents=True, exist_ok=True)
     return output_directory
