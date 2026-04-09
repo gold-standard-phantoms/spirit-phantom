@@ -13,6 +13,11 @@ from typing import NamedTuple
 
 import itk
 
+from spirit_phantom.core.initial_transform import (
+    INITIAL_FLIP_TRANSFORM_FILENAME,
+    write_initial_flip_transform,
+)
+
 logger = logging.getLogger(__name__)
 # Filename constants for output files
 RIGID_PARAMETERS_IN_FILENAME = "Rigid_Parameters_In.txt"
@@ -42,6 +47,8 @@ class RegistrationResult(NamedTuple):
         bspline_transform_path: Path to the B-spline transform output file.
         registered_image_path: Alias for bspline_image_path (the final registered image).
         registration_transform_path: Alias for bspline_transform_path (the final transform).
+        initial_transform_path: Optional path to an initial transform file used
+            before rigid registration.
     """
 
     rigid_image_path: Path
@@ -55,6 +62,7 @@ class RegistrationResult(NamedTuple):
     bspline_transform_path: Path
     registered_image_path: Path
     registration_transform_path: Path
+    initial_transform_path: Path | None = None
 
 
 class _StageResult(NamedTuple):
@@ -166,6 +174,7 @@ def _perform_rigid_registration(
     fixed_image: itk.Image,
     moving_image: itk.Image,
     save_path: Path,
+    initial_transform_file: Path | None = None,
 ) -> _StageResult:
     """Perform rigid registration stage.
 
@@ -173,20 +182,34 @@ def _perform_rigid_registration(
         fixed_image: The fixed (target) image.
         moving_image: The moving (source) image to register.
         save_path: Path to directory for saving transform files.
+        initial_transform_file: Optional path to an initial transform parameter
+            file to seed rigid registration.
 
     Returns:
         _StageResult containing the registered image, transform, and all file paths.
     """
     logger.info("Perform rigid registration: start")
 
+    rigid_parameter_object = RIGID_PARAM_OBJECT
+    registration_kwargs: dict[str, str] = {}
+    if initial_transform_file is not None:
+        rigid_parameter_map = dict(RIGID_PARAM_OBJECT.GetParameterMap(0))
+        rigid_parameter_map["AutomaticTransformInitialization"] = ("false",)
+        rigid_parameter_object = itk.ParameterObject.New()
+        rigid_parameter_object.AddParameterMap(rigid_parameter_map)
+        registration_kwargs["initial_transform_parameter_file_name"] = str(
+            initial_transform_file
+        )
+
     # Save the parameters used by elastix to perform the rigid transform
     parameters_path = save_path / RIGID_PARAMETERS_IN_FILENAME
-    RIGID_PARAM_OBJECT.WriteParameterFile(str(parameters_path))
+    rigid_parameter_object.WriteParameterFile(str(parameters_path))
     rigid_image, rigid_transform = itk.elastix_registration_method(
         fixed_image,
         moving_image,
-        parameter_object=RIGID_PARAM_OBJECT,
+        parameter_object=rigid_parameter_object,
         log_to_console=False,
+        **registration_kwargs,
     )
 
     # Save rigid registered atlas image to file
@@ -195,7 +218,11 @@ def _perform_rigid_registration(
 
     # Save the rigid transform produced by elastix to file
     transform_path = save_path / RIGID_TRANSFORM_FILENAME
-    _save_transform_to_file(rigid_transform, transform_path)
+    _save_transform_to_file(
+        rigid_transform,
+        transform_path,
+        initial_transform_file=initial_transform_file,
+    )
 
     logger.info("Perform rigid registration: end")
 
@@ -312,6 +339,8 @@ def _register(
     fixed_image: itk.Image,
     moving_image: itk.Image,
     save_path: Path,
+    *,
+    phantom_inverted: bool = False,
 ) -> tuple[itk.Image, itk.ParameterObject, list[Path]]:
     """Private register method that makes use of the three stage methods.
 
@@ -323,6 +352,8 @@ def _register(
         fixed_image: The fixed (target) image.
         moving_image: The moving (source) image to register.
         save_path: Path to directory for saving transform files. Must be writable.
+        phantom_inverted: Whether to apply an initial 180-degree Y rotation
+            before rigid registration.
 
     Returns:
         A tuple of (registered_image, transform, list of paths).
@@ -356,7 +387,19 @@ def _register(
         raise ValueError(msg)
 
     # Perform three-stage registration: rigid, affine, B-spline
-    rigid_result = _perform_rigid_registration(fixed_image, moving_image, save_path)
+    initial_transform_path: Path | None = None
+    if phantom_inverted:
+        initial_transform_path = write_initial_flip_transform(
+            save_path / INITIAL_FLIP_TRANSFORM_FILENAME,
+            image=fixed_image,
+        )
+
+    rigid_result = _perform_rigid_registration(
+        fixed_image,
+        moving_image,
+        save_path,
+        initial_transform_file=initial_transform_path,
+    )
     affine_result = _perform_affine_registration(
         fixed_image, moving_image, rigid_result.transform_path, save_path
     )
@@ -387,6 +430,7 @@ def register_atlas(
     fixed_image: Path,
     output_directory: Path,
     cli_user: bool = False,
+    phantom_inverted: bool = False,
 ) -> RegistrationResult:
     """Register the moving image to the fixed image using file paths.
 
@@ -403,6 +447,8 @@ def register_atlas(
         output_directory: Directory for all output files. Intermediate images,
             input parameters, and transform files will all be saved here.
         cli_user: Whether the function is being called from the CLI. If True, will print logging messages to the console.
+        phantom_inverted: Whether to apply an initial 180-degree Y rotation
+            before rigid registration.
 
     Returns:
         RegistrationResult containing paths to all output files including
@@ -436,11 +482,21 @@ def register_atlas(
     moving_image_itk = itk.imread(str(moving_image), itk.F)
     fixed_image_itk = itk.imread(str(fixed_image), itk.F)
 
+    initial_transform_path: Path | None = None
+    if phantom_inverted:
+        initial_transform_path = write_initial_flip_transform(
+            output_directory / INITIAL_FLIP_TRANSFORM_FILENAME,
+            image=fixed_image_itk,
+        )
+
     if cli_user:
         print("Performing rigid part of registration...")
     # Perform three-stage registration: rigid, affine, B-spline
     rigid_result = _perform_rigid_registration(
-        fixed_image_itk, moving_image_itk, output_directory
+        fixed_image_itk,
+        moving_image_itk,
+        output_directory,
+        initial_transform_file=initial_transform_path,
     )
     if cli_user:
         print("Performing affine part of registration...")
@@ -470,4 +526,5 @@ def register_atlas(
         bspline_transform_path=bspline_result.transform_path,
         registered_image_path=bspline_result.image_path,
         registration_transform_path=bspline_result.transform_path,
+        initial_transform_path=initial_transform_path,
     )
