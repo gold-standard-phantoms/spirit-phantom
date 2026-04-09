@@ -249,6 +249,16 @@ def register(
             help="Generate checkerboard overlay PNGs after registration.",
         ),
     ] = False,
+    phantom_inverted: Annotated[
+        bool,
+        typer.Option(
+            "--phantom-inverted/--no-phantom-inverted",
+            help=(
+                "Apply an initial 180-degree Y-rotation before registration to "
+                "correct for an inverted phantom scan."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Register an atlas image, with optional follow-up analysis.
 
@@ -260,6 +270,8 @@ def register(
         analyse: Optional analysis method to run after registration.
         erosion_voxels: Erosion voxels for vial measurement analysis.
         generate_checkerboards: Whether checkerboard images should be generated.
+        phantom_inverted: Whether an initial orientation correction should be
+            applied for an inverted phantom scan.
     """
     # Delay heavy registration imports so `--help` stays responsive.
     from spirit_phantom.core.registration import register_atlas  # noqa: PLC0415
@@ -278,11 +290,14 @@ def register(
         "registration taking place using moving image located at: ",
         str(resolved_moving_image),
     )
+    if phantom_inverted:
+        print("Phantom inverted: applying initial 180-degree Y-rotation.")
     registration_result = register_atlas(
         moving_image=resolved_moving_image,
         fixed_image=fixed_image,
         output_directory=resolved_output_directory,
         cli_user=True,
+        phantom_inverted=phantom_inverted,
     )
 
     print("Registration completed.")

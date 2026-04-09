@@ -90,6 +90,16 @@ uv run spirit-phantom register \
   --output-directory path/to/registration_output
 ```
 
+If the phantom was scanned inverted (upside down), provide an initial orientation
+correction before rigid registration:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --phantom-inverted \
+  --output-directory path/to/registration_output
+```
+
 Atomic vial measurement analysis (prints detailed table; saves only when output directory is provided):
 
 ```bash
@@ -215,6 +225,7 @@ result = register_atlas(
     moving_image=Path("moving_image.nii.gz"),
     fixed_image=Path("fixed_image.nii.gz"),
     output_directory=Path("registration_output"),
+    phantom_inverted=False,
 )
 
 # Access final registered image and transform (convenience aliases)
