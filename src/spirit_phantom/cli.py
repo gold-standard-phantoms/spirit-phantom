@@ -58,7 +58,7 @@ def _validate_erosion_voxels(*, erosion_voxels: int) -> None:
 
 def _run_vial_measurements(
     *,
-    registered_atlas_image_path: Path,
+    transformed_component_atlas_image_path: Path,
     mri_scan_image_path: Path,
     erosion_voxels: int,
     output_directory: Path | None,
@@ -67,7 +67,7 @@ def _run_vial_measurements(
     """Run vial measurement analysis and optionally save detailed results.
 
     Args:
-        registered_atlas_image_path: Path to the registered atlas image.
+        transformed_component_atlas_image_path: Path to the transformed component atlas image.
         mri_scan_image_path: Path to the scanner image.
         erosion_voxels: Number of voxels to erode each vial mask.
         output_directory: Directory used for output files when saving is enabled.
@@ -82,7 +82,7 @@ def _run_vial_measurements(
 
     _validate_erosion_voxels(erosion_voxels=erosion_voxels)
     details_rows = compute_vial_statistics_details(
-        registered_atlas_image_path=registered_atlas_image_path,
+        registered_atlas_image_path=transformed_component_atlas_image_path,
         mri_scan_image_path=mri_scan_image_path,
         erosion_voxels=erosion_voxels,
     )
@@ -135,13 +135,13 @@ def _build_checkerboard_slice_indices(*, fixed_image_path: Path) -> list[int]:
 def _generate_checkerboard_images(
     *,
     fixed_image_path: Path,
-    registered_image_path: Path,
+    transformed_component_atlas_image_path: Path,
 ) -> None:
     """Generate checkerboard images for visual registration quality checks.
 
     Args:
         fixed_image_path: Path to the fixed image used as registration target.
-        registered_image_path: Path to the registered moving image output.
+        transformed_component_atlas_image_path: Path to the transformed component atlas image output.
     """
     from spirit_phantom.utils.visualisation import (  # noqa: PLC0415
         visualise_checkerboard,
@@ -150,10 +150,12 @@ def _generate_checkerboard_images(
     slice_indices = _build_checkerboard_slice_indices(fixed_image_path=fixed_image_path)
     visualise_checkerboard(
         fixed_image_path=fixed_image_path,
-        registered_image_path=registered_image_path,
+        registered_image_path=transformed_component_atlas_image_path,
         slice_indices=slice_indices,
     )
-    print(f"Saved checkerboard images in: {registered_image_path.parent}")
+    print(
+        f"Saved checkerboard images in: {transformed_component_atlas_image_path.parent}"
+    )
 
 
 def _format_dice_score_rows_table(
@@ -303,22 +305,29 @@ def register(
     print("Registration completed.")
     print(f"Output directory: {resolved_output_directory}")
     print(f"Registered atlas image: {registration_result.registered_image_path}")
+    if registration_result.transformed_component_atlas_path is None:
+        msg = "Registration did not produce a transformed component atlas."
+        raise RuntimeError(msg)
+    print(
+        "Transformed component atlas: "
+        f"{registration_result.transformed_component_atlas_path}"
+    )
     print(
         "Final registration transform: "
         f"{registration_result.registration_transform_path}"
     )
 
     if generate_checkerboards:
-        print("Generating checkerboard visualisations")
+        print("Generating checkerboard visualisations based on registered signal atlas")
         _generate_checkerboard_images(
             fixed_image_path=fixed_image,
-            registered_image_path=registration_result.registered_image_path,
+            transformed_component_atlas_image_path=registration_result.transformed_component_atlas_path,
         )
 
     if analyse == AnalysisMethod.VIAL_MEASUREMENTS:
         print("Running analysis: vial-measurements")
         _run_vial_measurements(
-            registered_atlas_image_path=registration_result.registered_image_path,
+            transformed_component_atlas_image_path=registration_result.transformed_component_atlas_path,
             mri_scan_image_path=fixed_image,
             erosion_voxels=erosion_voxels,
             output_directory=resolved_output_directory,
@@ -328,9 +337,9 @@ def register(
 
 @analyse_app.command("vial-measurements")
 def analyse_vial_measurements(
-    registered_atlas_image_path: Annotated[
+    transformed_component_atlas_image_path: Annotated[
         Path,
-        typer.Argument(help="Path to the registered atlas image."),
+        typer.Argument(help="Path to the transformed component atlas image."),
     ],
     mri_scan_image_path: Annotated[
         Path,
@@ -355,7 +364,7 @@ def analyse_vial_measurements(
     """Run vial measurement analysis on an already registered atlas.
 
     Args:
-        registered_atlas_image_path: Path to the registered atlas image.
+        transformed_component_atlas_image_path: Path to the transformed component atlas image.
         mri_scan_image_path: Path to the scanner image.
         erosion_voxels: Number of voxels to erode each vial ROI.
         output_directory: Optional output directory for saved detailed results.
@@ -363,7 +372,7 @@ def analyse_vial_measurements(
     if output_directory is not None:
         output_directory.mkdir(parents=True, exist_ok=True)
     _run_vial_measurements(
-        registered_atlas_image_path=registered_atlas_image_path,
+        transformed_component_atlas_image_path=transformed_component_atlas_image_path,
         mri_scan_image_path=mri_scan_image_path,
         erosion_voxels=erosion_voxels,
         output_directory=output_directory,

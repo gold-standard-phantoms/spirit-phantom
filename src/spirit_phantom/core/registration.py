@@ -13,6 +13,7 @@ from typing import NamedTuple
 
 import itk
 
+from spirit_phantom import get_default_component_atlas_image_path
 from spirit_phantom.core.initial_transform import (
     INITIAL_FLIP_TRANSFORM_FILENAME,
     write_initial_flip_transform,
@@ -30,6 +31,7 @@ RIGID_TRANSFORM_FILENAME = "Rigid_Transform.txt"
 AFFINE_TRANSFORM_FILENAME = "Affine_Transform.txt"
 BSPLINE_TRANSFORM_FILENAME = "BSpline_Transform.txt"
 TRANSFORMED_POINTS_FILENAME = "transformed_points.txt"
+TRANSFORMED_COMPONENT_ATLAS_FILENAME = "transformed_component_atlas.nii.gz"
 
 
 class RegistrationResult(NamedTuple):
@@ -49,6 +51,9 @@ class RegistrationResult(NamedTuple):
         registration_transform_path: Alias for bspline_transform_path (the final transform).
         initial_transform_path: Optional path to an initial transform file used
             before rigid registration.
+        transformed_component_atlas_path: Path to the transformed component atlas
+            in fixed-image space, produced by applying the final registration
+            transform with transformix.
     """
 
     rigid_image_path: Path
@@ -63,6 +68,40 @@ class RegistrationResult(NamedTuple):
     registered_image_path: Path
     registration_transform_path: Path
     initial_transform_path: Path | None = None
+    transformed_component_atlas_path: Path | None = None
+
+
+def _transform_component_atlas(
+    *,
+    transform_path: Path,
+    output_directory: Path,
+) -> Path:
+    """Transform the default component atlas using the final registration transform.
+
+    Args:
+        transform_path: Path to the final registration transform file.
+        output_directory: Directory where the transformed atlas is saved.
+
+    Returns:
+        Path to the transformed component atlas image.
+    """
+    component_atlas_path = get_default_component_atlas_image_path()
+    component_atlas_image = itk.imread(str(component_atlas_path), itk.F)
+    transform_parameters = itk.ParameterObject.New()
+    transform_parameters.ReadParameterFile(str(transform_path))
+
+    transformed_component_atlas_image = itk.transformix_filter(
+        component_atlas_image,
+        transform_parameters,
+    )
+    transformed_component_atlas_path = (
+        output_directory / TRANSFORMED_COMPONENT_ATLAS_FILENAME
+    )
+    itk.imwrite(
+        transformed_component_atlas_image, str(transformed_component_atlas_path)
+    )
+
+    return transformed_component_atlas_path
 
 
 class _StageResult(NamedTuple):
@@ -512,6 +551,13 @@ def register_atlas(
         output_directory,
     )
     if cli_user:
+        print("Applying final transform to component atlas...")
+    transformed_component_atlas_path = _transform_component_atlas(
+        transform_path=bspline_result.transform_path,
+        output_directory=output_directory,
+    )
+
+    if cli_user:
         print("Registration complete!")
 
     return RegistrationResult(
@@ -527,4 +573,5 @@ def register_atlas(
         registered_image_path=bspline_result.image_path,
         registration_transform_path=bspline_result.transform_path,
         initial_transform_path=initial_transform_path,
+        transformed_component_atlas_path=transformed_component_atlas_path,
     )
