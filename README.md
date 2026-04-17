@@ -2,6 +2,35 @@
 
 Tools for analysing Gold Standard Phantoms (GSP) SPIRIT phantom data.
 
+## Quick Start
+
+Create a virtual environment and install `spirit-phantom` from GitHub:
+
+```bash
+uv venv .venv --python=3.12
+```
+
+```bash
+uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom'
+```
+
+View the available registration options:
+
+```bash
+uv run spirit-phantom register --help
+```
+
+Register a scanner image, run vial measurement analysis, and generate checkerboard
+quality-control images in a single command:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --analyse vial-measurements \
+  --generate-checkerboards
+```
+
+
 ## Installation
 
 ### Python Version
@@ -12,35 +41,33 @@ We recommend using the latest supported version of Python. `spirit-phantom` curr
 
 You must ensure that the following software is available on your system:
 
-- **uv** (for environment and package management)
-- **Python** (installed automatically by uv)
-- **NumPy** (installed automatically as a project dependency)
+- **[uv](https://github.com/astral-sh/uv)** (for environment and package management)
+- **[Python](https://www.python.org/)** (installed automatically by uv)
+- **[NumPy](https://numpy.org/)** (installed automatically by uv as a project dependency)
 
 Additional tools are required only for development (testing, linting, and documentation)
 but are also automatically installed by uv:
 
-- **pytest** and **pytest-cov**
-- **ruff**
-- **mypy**
-- **tox-uv** (for replicating the checks as done by CI/CD)
-- **mkdocs**, **mkdocs-material**, **mkdocstrings[python]**, **mkdocs-material** and **markdown-include**
-- **scipy** and **scipy-stubs**
+- **[pytest](https://docs.pytest.org/)** and **[pytest-cov](https://pytest-cov.readthedocs.io/)**
+- **[ruff](https://docs.astral.sh/ruff/)**
+- **[mypy](https://mypy-lang.org/)**
+- **[tox-uv](https://github.com/tox-dev/tox-uv)** (for replicating the checks as done by CI/CD)
+- **[mkdocs](https://www.mkdocs.org/)**, **[mkdocs-material](https://squidfunk.github.io/mkdocs-material/)**, **[mkdocstrings[python]](https://mkdocstrings.github.io/python/)**, **[mkdocs-material](https://squidfunk.github.io/mkdocs-material/)** and **[markdown-include](https://github.com/mondeja/mkdocs-include-markdown-plugin)**
+- **[scipy](https://scipy.org/)** and **[scipy-stubs](https://github.com/scipy/scipy-stubs)**
 
 All of these are installed when you run `uv sync` in a development environment.
 
-### Install spirit-phantom
+### Install from GitHub
 
-If the package is available in your environment index, you can install it into an existing environment with `uv`:
-
-```bash
-uv add spirit-phantom
-```
-
-Or using `pip`:
+Install the latest version directly from GitHub into an existing virtual environment:
 
 ```bash
-pip install spirit-phantom
+uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom'
 ```
+
+### Install from a Package Index
+
+This project is currently not publishing to a package index.
 
 If you are working directly from a clone of this repository and want to install in editable mode with `pip`:
 
@@ -58,7 +85,9 @@ The CLI supports both atomic and combined workflows:
 - Register and immediately run analysis in one command.
 - Run standalone analysis commands such as per-vial Dice scoring.
 
-Atomic registration:
+#### Registration
+
+Atomic registration (outputs are saved to a timestamped directory by default):
 
 ```bash
 uv run spirit-phantom register \
@@ -106,6 +135,34 @@ uv run spirit-phantom register \
   --phantom-inverted \
   --output-directory path/to/registration_output
 ```
+
+#### Combined Workflow
+
+Register, analyse, and generate checkerboard quality-control images in one step:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --analyse vial-measurements \
+  --generate-checkerboards
+```
+
+Additional options can be combined freely:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --output-directory path/to/registration_output \
+  --analyse vial-measurements \
+  --erosion-voxels 1 \
+  --generate-checkerboards
+```
+
+In the combined case, detailed vial statistics are saved automatically to:
+
+`path/to/registration_output/vial_statistics_details.txt`
+
+#### Standalone Analyses
 
 Atomic vial measurement analysis (prints detailed table; saves only when output directory is provided):
 
@@ -179,20 +236,6 @@ Interpretation notes:
 - A lower Dice score with large voxel count differences can indicate local misregistration or segmentation mismatch.
 
 If the two images have different shapes, the command exits with a clear validation error.
-
-Combined workflow (register and then run vial measurements):
-
-```bash
-uv run spirit-phantom register \
-  path/to/scanner_image.nii.gz \
-  --output-directory path/to/registration_output \
-  --analyse vial-measurements \
-  --erosion-voxels 0
-```
-
-In the combined case, detailed vial statistics are saved automatically to:
-
-`path/to/registration_output/vial_statistics_details.txt`
 
 ### Slice Thickness
 
