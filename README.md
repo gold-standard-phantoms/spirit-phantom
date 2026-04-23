@@ -237,6 +237,30 @@ Interpretation notes:
 
 If the two images have different shapes, the command exits with a clear validation error.
 
+Atomic ethylene glycol mask generation (single-slice multi-echo GRE):
+
+```bash
+uv run spirit-phantom analyse eg-mask \
+  path/to/registered_component_atlas.nii.gz \
+  path/to/multiecho_scan.nii.gz \
+  --output-mask-image-path path/to/output_mask.nii.gz \
+  --minimum-sad-counts 1000 \
+  --dilation-iterations 1 \
+  --vis
+```
+
+If `--output-mask-image-path` is omitted, the output defaults to:
+
+`<parent of multiecho_scan>/ethylene_glycol_mask_<timestamp>.nii.gz`
+
+The `eg-mask` workflow now:
+
+- Applies binary dilation to the mapped EG segmentation before filtering.
+- Computes `sum(abs(S[n] - S[n-1]))` across the 4th dimension for each candidate voxel.
+- Rejects voxels with summed absolute difference below the configured threshold.
+- Saves a diagnostic plot next to the mask as `<mask_stem>_sad_filter_plot.png` when `--vis` is enabled.
+
+
 ### Slice Thickness
 
 The NEMA MS-5 2018 slice thickness function will be used as an example. 
