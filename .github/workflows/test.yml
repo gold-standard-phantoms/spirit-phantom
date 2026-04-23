@@ -12,4 +12,5 @@ jobs:
     with:
       python_version: "3.11"
       use_private_pypi: false
+      mypy: true
     secrets: inherit
