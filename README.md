@@ -71,15 +71,22 @@ Registration outputs are saved to `path/to/registration_output` as:
 - `Rigid_Image.nii.gz`
 - `Affine_Image.nii.gz`
 - `Bspline_Image.nii.gz`
+- `transformed_component_atlas.nii.gz`
 
-`Bspline_Image.nii.gz` is the final registration result and should be used for vial measurements.
+`Bspline_Image.nii.gz` is the final registered signal atlas image.
+`transformed_component_atlas.nii.gz` is produced by applying the final transform to the
+default component atlas and should be used for vial measurements.
 
-By default, `register` downloads the default SPIRIT atlas image and caches it locally using `pooch` (cache namespace: `spirit-phantom`).
-The pinned download URL and expected SHA-256 are configured in `src/spirit_phantom/cli.py`:
+By default, `register` uses the default SPIRIT atlas set and caches files locally using
+`pooch` (cache namespace: `spirit-phantom`).
+The pinned download URLs and expected SHA-256 values are configured in
+`src/spirit_phantom/__init__.py`:
 
-- URL: `https://raw.githubusercontent.com/gold-standard-phantoms/public-data/121591075cd927c0cb49cdffe91c3292c4882ffc/phantoms/SPIRIT/atlas/spirit_issue1.0_vx0.25_sub1.nii.gz`
-- SHA-256: `77f027524325c4ad4d2d23ee8c224dfd04080216531c309d93e9fe41d686739d`
-The first run may require network access; subsequent runs use the cached atlas.
+- Signal atlas URL: `https://raw.githubusercontent.com/gold-standard-phantoms/public-data/main/phantoms/SPIRIT/atlas/spirit_issue1.0_vx0.25_sub2.nii.gz`
+- Signal atlas SHA-256: `5d0614d32ec6c5b638db9b0f5e3a67d2e34765f5974d5a3568d5d9378e93ded0`
+- Component atlas URL: `https://raw.githubusercontent.com/gold-standard-phantoms/public-data/main/phantoms/SPIRIT/atlas/spirit_issue1.0_vx0.25_sub2_components.nii.gz`
+- Component atlas SHA-256: `577e92b10e3855a8f93a89514f3eee79e2bc8917d3c6c861dba06c55433eef16`
+The first run may require network access; subsequent runs use the cached atlases.
 
 To override the default atlas, pass a moving image path as the second argument:
 
@@ -104,7 +111,7 @@ Atomic vial measurement analysis (prints detailed table; saves only when output 
 
 ```bash
 uv run spirit-phantom analyse vial-measurements \
-  path/to/registration_output/Bspline_Image.nii.gz \
+  path/to/registration_output/transformed_component_atlas.nii.gz \
   path/to/scanner_image.nii.gz \
   --erosion-voxels 0 \
   --output-directory path/to/analysis_output
@@ -231,6 +238,7 @@ result = register_atlas(
 # Access final registered image and transform (convenience aliases)
 print(result.registered_image_path)       # Final registered image
 print(result.registration_transform_path) # Final composed transform
+print(result.transformed_component_atlas_path)  # Atlas components transformed to fixed-image space
 
 # Access intermediate images
 print(result.rigid_image_path)    # Rigid-registered image
@@ -253,8 +261,8 @@ The `register_atlas` function returns a `RegistrationResult` containing paths to
 ### Vial Statistics
 
 The vial statistics module provides a method for extracting SPIRIT vial values
-from a registered atlas and presenting a table of vial metadata and measurement
-statistics.
+from a transformed component atlas and presenting a table of vial metadata and
+measurement statistics.
 
 ```
 from pathlib import Path
@@ -266,7 +274,7 @@ from spirit_phantom.core.vials import (
 )
 
 detailed_rows = compute_vial_statistics_details(
-    registered_atlas_image_path=Path("registered_atlas.nii.gz"),
+    registered_atlas_image_path=Path("transformed_component_atlas.nii.gz"),
     mri_scan_image_path=Path("scanner_image.nii.gz"),
     erosion_voxels=0,
 )
