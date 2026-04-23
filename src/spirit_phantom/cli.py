@@ -7,6 +7,7 @@ The ``analyse`` command group includes:
 
 - ``vial-measurements`` for per-vial intensity statistics.
 - ``dice`` for per-vial overlap scores between manual and atlas labels.
+- ``eg-mask`` for ethylene glycol vial mask generation from multi-echo data.
 """
 
 from collections.abc import Sequence
@@ -18,6 +19,11 @@ from typing import Annotated, Any
 import typer
 
 from spirit_phantom import get_default_register_moving_image_path
+from spirit_phantom.core.multi_echo_thermometry import (
+    _EG_MASK_DILATION_ITERATIONS,
+    _EG_MASK_MIN_SAD_COUNTS,
+    coordinate_ethylene_glycol_vial_segmentation,
+)
 
 app = typer.Typer(help="SPIRIT phantom command line tools.")
 analyse_app = typer.Typer(help="Run analyses on registered phantom data.")
@@ -419,6 +425,101 @@ def analyse_dice(
         raise typer.BadParameter(str(error)) from error
 
     print(_format_dice_score_rows_table(rows=rows))
+
+
+@analyse_app.command("eg-mask")
+def analyse_eg_mask(
+    registered_component_atlas: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the registered component atlas labelled segmentation NIfTI image."
+        ),
+    ],
+    multi_echo_scan: Annotated[
+        Path,
+        typer.Argument(help="Path to the multi-echo gradient echo NIfTI image."),
+    ],
+    *,
+    output_mask_image_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-mask-image-path",
+            "-o",
+            help=(
+                "Optional output path for the saved mask NIfTI. Defaults to "
+                "ethylene_glycol_mask_<timestamp>.nii.gz in the multi-echo parent directory."
+            ),
+        ),
+    ] = None,
+    vis: Annotated[
+        bool,
+        typer.Option(
+            "--vis",
+            help="Save a Sum of Absolute Differences diagnostic plot for EG mask filtering.",
+        ),
+    ] = False,
+    minimum_sad_counts: Annotated[
+        float,
+        typer.Option(
+            "--minimum-sad-counts",
+            help=(
+                "Sum of Absolute Differences threshold in counts for EG mask filtering."
+            ),
+        ),
+    ] = _EG_MASK_MIN_SAD_COUNTS,
+    dilation_iterations: Annotated[
+        int,
+        typer.Option(
+            "--dilation-iterations",
+            help=("Number of binary dilation iterations for the EG mask."),
+        ),
+    ] = _EG_MASK_DILATION_ITERATIONS,
+) -> None:
+    """Create and save an ethylene glycol vial mask NIfTI file.
+
+    Args:
+        registered_component_atlas: Path to the registered component atlas.
+        multi_echo_scan: Path to the multi-echo GRE image.
+        output_mask_image_path: Optional explicit output path for the saved mask.
+        vis: Whether to save a SAD diagnostic visualisation.
+        minimum_sad_counts: Sum of Absolute Differences threshold.
+        dilation_iterations: Binary dilation iteration count.
+    """
+    if not registered_component_atlas.exists():
+        msg = f"Registered component atlas file not found: {registered_component_atlas}"
+        raise typer.BadParameter(msg)
+    if not multi_echo_scan.exists():
+        msg = f"Multi-echo gradient echo file not found: {multi_echo_scan}"
+        raise typer.BadParameter(msg)
+    if minimum_sad_counts < 0.0:
+        msg = "--minimum-sad-counts must be greater than or equal to 0."
+        raise typer.BadParameter(msg)
+    if dilation_iterations < 0:
+        msg = "--dilation-iterations must be greater than or equal to 0."
+        raise typer.BadParameter(msg)
+
+    try:
+        saved_path = coordinate_ethylene_glycol_vial_segmentation(
+            registered_component_atlas_image_path=registered_component_atlas,
+            multi_echo_gradient_echo_scan_image_path=multi_echo_scan,
+            output_mask_image_path=output_mask_image_path,
+            minimum_sad_counts=minimum_sad_counts,
+            dilation_iterations=dilation_iterations,
+            generate_sad_visualisation=vis,
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    print(f"Saved ethylene glycol mask: {saved_path}")
+    if vis:
+        if saved_path.name.endswith(".nii.gz"):
+            mask_stem = saved_path.name[: -len(".nii.gz")]
+        else:
+            mask_stem = saved_path.stem
+        print(
+            "Saved EG mask Sum of Absolute Differences diagnostic plot: "
+            f"{saved_path.parent / f'{mask_stem}_sad_filter_plot.png'}"
+        )
 
 
 def main() -> None:
