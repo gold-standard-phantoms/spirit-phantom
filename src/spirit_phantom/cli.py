@@ -154,14 +154,15 @@ def _generate_checkerboard_images(
     )
 
     slice_indices = _build_checkerboard_slice_indices(fixed_image_path=fixed_image_path)
-    visualise_checkerboard(
+    checkerboard_paths = visualise_checkerboard(
         fixed_image_path=fixed_image_path,
         registered_image_path=transformed_component_atlas_image_path,
         slice_indices=slice_indices,
     )
-    print(
-        f"Saved checkerboard images in: {transformed_component_atlas_image_path.parent}"
-    )
+    if checkerboard_paths:
+        print("Saved checkerboard images:")
+        for checkerboard_path in checkerboard_paths:
+            print(f"- {checkerboard_path}")
 
 
 def _format_dice_score_rows_table(

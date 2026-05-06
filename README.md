@@ -418,16 +418,24 @@ from pathlib import Path
 
 from spirit_phantom.utils.visualisation import visualise_checkerboard
 
-visualise_checkerboard(
+checkerboard_paths = visualise_checkerboard(
     fixed_image_path=Path("fixed_image.nii.gz"),
     registered_image_path=Path("registration_output/registered_image.nii.gz"),
     slice_indices=[180, 240, 300],
+    save_directory=Path("registration_output/checkerboards"),
 )
+
+for checkerboard_path in checkerboard_paths:
+    print(checkerboard_path)
 ```
 
 The `slice_indices` argument specifies the axial slice indices (z indices) at which
 checkerboard images are generated, allowing visual assessment of registration
 quality on slices of interest.
+
+`visualise_checkerboard` returns a list of output PNG paths. Each image is saved
+in `save_directory`, or in the directory containing `registered_image_path` when
+no save directory is provided.
 
 ## Development
 

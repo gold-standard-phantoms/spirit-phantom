@@ -49,19 +49,31 @@ def visualise_checkerboard(
     fixed_image_path: Path,
     registered_image_path: Path,
     slice_indices: list[int],
-) -> None:
+    save_directory: Path | None = None,
+) -> list[Path]:
     """Create and save checkerboard visualisations for fixed and registered images.
 
     Generates checkerboard overlays of the fixed and registered images on the
     specified axial slice indices using ITK and saves each slice as a PNG image
-    in the directory of the registered image.
+    in ``save_directory``. If no directory is provided, images are saved beside
+    the registered image.
 
     Args:
         fixed_image_path: Path to the fixed (reference) NIfTI image.
         registered_image_path: Path to the registered moving image in the
             fixed image space.
         slice_indices: Axial slice indices (z indices) to visualise.
+        save_directory: Optional directory where checkerboard PNG images are
+            saved. Defaults to the directory containing ``registered_image_path``.
+
+    Returns:
+        Paths to the generated checkerboard PNG images. The files are saved in
+        ``save_directory`` or the directory containing ``registered_image_path``.
     """
+    output_dir: Path = (
+        registered_image_path.parent if save_directory is None else save_directory
+    )
+
     # Load NIfTI images via ITK.
     fixed_data: np.ndarray = _load_nifti_as_array(image_path=fixed_image_path)
     registered_data: np.ndarray = _load_nifti_as_array(
@@ -82,12 +94,12 @@ def visualise_checkerboard(
         msg = "No fiducial slice indices fall within the fixed image volume."
         raise ValueError(msg)
 
-    output_dir: Path = registered_image_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
     max_panels: Final[int] = min(5, len(valid_slices))
 
     # Use the ITK checkerboard filter on the selected slices and save per-slice images.
+    output_paths: list[Path] = []
     for slice_idx in valid_slices[:max_panels]:
         fixed_slice_norm: np.ndarray = _normalise_slice(
             slice_data=fixed_data[:, :, slice_idx],
@@ -118,13 +130,17 @@ def visualise_checkerboard(
             itk_checkerboard,
             str(itk_output_path),
         )
+        output_paths.append(itk_output_path)
+
+    return output_paths
 
 
 def visualise_checkerboard_tranformix(
     fixed_image_path: Path,
     registered_image_path: Path,
     atlas_points_path: Path,
-) -> None:
+    save_directory: Path | None = None,
+) -> list[Path]:
     """Create and save checkerboard visualisations using transformix output points.
 
     Uses fiducial centre locations in voxel coordinates to derive unique axial
@@ -137,6 +153,11 @@ def visualise_checkerboard_tranformix(
             fixed image space.
         atlas_points_path: Path to the text file containing fiducial centre
             coordinates in voxels (x y z per line).
+        save_directory: Optional directory where checkerboard PNG images are
+            saved. Defaults to the directory containing ``registered_image_path``.
+
+    Returns:
+        Paths to the generated checkerboard PNG images.
 
     Raises:
         FileNotFoundError: If any of the provided paths do not exist.
@@ -163,8 +184,9 @@ def visualise_checkerboard_tranformix(
     slice_indices_np: np.ndarray = np.unique(np.round(z_vx).astype(np.intp))
     slice_indices_np.sort()
     slice_indices: list[int] = [int(k) for k in slice_indices_np]
-    visualise_checkerboard(
+    return visualise_checkerboard(
         fixed_image_path=fixed_image_path,
         registered_image_path=registered_image_path,
         slice_indices=slice_indices,
+        save_directory=save_directory,
     )
