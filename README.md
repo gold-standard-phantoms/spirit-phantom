@@ -237,7 +237,7 @@ Interpretation notes:
 
 If the two images have different shapes, the command exits with a clear validation error.
 
-Atomic ethylene glycol mask generation (single-slice multi-echo GRE):
+Atomic ethylene glycol mask generation (multi-echo GRE):
 
 ```bash
 uv run spirit-phantom analyse eg-mask \
@@ -253,12 +253,35 @@ If `--output-mask-image-path` is omitted, the output defaults to:
 
 `<parent of multiecho_scan>/ethylene_glycol_mask_<timestamp>.nii.gz`
 
-The `eg-mask` workflow now:
+The `eg-mask` workflow:
 
+- Transfers the EG atlas labels into the multi-echo GRE voxel grid using a
+  3-D inverse-warp resampling with nearest-neighbour interpolation (the
+  shared `transfer_atlas_labels_to_image_space` utility), so it is no longer
+  restricted to a single slice.
 - Applies binary dilation to the mapped EG segmentation before filtering.
 - Computes `sum(abs(S[n] - S[n-1]))` across the 4th dimension for each candidate voxel.
 - Rejects voxels with summed absolute difference below the configured threshold.
 - Saves a diagnostic plot next to the mask as `<mask_stem>_sad_filter_plot.png` when `--vis` is enabled.
+
+Atomic mapped atlas mask generation (full atlas labels onto an arbitrary scan):
+
+```bash
+uv run spirit-phantom analyse map-mask \
+  path/to/registered_component_atlas.nii.gz \
+  path/to/scan.nii.gz \
+  --output-mask-image-path path/to/output_mask.nii.gz
+```
+
+If `--output-mask-image-path` is omitted, the output defaults to:
+
+`<parent of scan>/mapped_atlas_mask_<timestamp>.nii.gz`
+
+Unlike `eg-mask`, the `map-mask` command preserves all non-zero atlas labels
+and does not perform dilation or SAD filtering. It is intended for projecting a
+registered component atlas onto any target scan (multi-echo or otherwise) to
+produce a labelled mask in the scan's voxel grid, using the same 3-D
+nearest-neighbour resampling as `eg-mask`.
 
 
 ### Slice Thickness
@@ -407,6 +430,52 @@ An example of the output is with `erosion_voxels=1`:
 | R       | MNCL-0320    | 0.320mM Aqueous MnCl2 | 351.518779     | 23.100912 | 11662            |
 | S       | MNCL-0017    | 0.017mM Aqueous MnCl2 | 244.778041     | 22.960382 | 11804            |
 | T       | MNCL-0159    | 0.159mM Aqueous MnCl2 | 373.729220     | 31.781529 | 12464            |
+
+### Atlas Label Transfer
+
+The `spirit_phantom.io.atlas_transfer` module transfers labels from a
+registered component atlas into the voxel grid of an arbitrary target image.
+It uses inverse-warp (pull) resampling with nearest-neighbour interpolation,
+so every target voxel receives a value (no striped/grid holes when the target
+grid is finer than the atlas) and discrete label values are preserved.
+
+To project all atlas labels onto a target scan and write a labelled NIfTI
+mask:
+
+```
+from pathlib import Path
+
+from spirit_phantom.core.multi_echo_thermometry import coordinate_mapped_atlas_mask
+
+mapped_mask_path = coordinate_mapped_atlas_mask(
+    registered_component_atlas_image_path=Path("transformed_component_atlas.nii.gz"),
+    scan_image_path=Path("scanner_image.nii.gz"),
+    output_mask_image_path=Path("mapped_atlas_mask.nii.gz"),
+)
+print(mapped_mask_path)
+```
+
+For lower-level control (returning a NumPy array rather than writing a file,
+or transferring only a subset of labels), use
+`transfer_atlas_labels_to_image_space` directly:
+
+```
+import nibabel
+
+from spirit_phantom.io.atlas_transfer import transfer_atlas_labels_to_image_space
+
+atlas_image = nibabel.nifti1.load("transformed_component_atlas.nii.gz")
+target_image = nibabel.nifti1.load("scanner_image.nii.gz")
+
+mapped_labels = transfer_atlas_labels_to_image_space(
+    atlas_image=atlas_image,
+    target_image=target_image,
+    labels=None,
+)
+```
+
+Pass `labels=[...]` to keep only specific atlas labels (for example, the EG
+vial labels used internally by the `eg-mask` workflow).
 
 ### Checkerboard visualisation
 
