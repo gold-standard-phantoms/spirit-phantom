@@ -8,6 +8,7 @@ The ``analyse`` command group includes:
 - ``vial-measurements`` for per-vial intensity statistics.
 - ``dice`` for per-vial overlap scores between manual and atlas labels.
 - ``eg-mask`` for ethylene glycol vial mask generation from multi-echo data.
+- ``map-mask`` for full atlas label mapping onto a scan image.
 """
 
 from collections.abc import Sequence
@@ -23,6 +24,7 @@ from spirit_phantom.core.multi_echo_thermometry import (
     _EG_MASK_DILATION_ITERATIONS,
     _EG_MASK_MIN_SAD_COUNTS,
     coordinate_ethylene_glycol_vial_segmentation,
+    coordinate_mapped_atlas_mask,
 )
 
 app = typer.Typer(help="SPIRIT phantom command line tools.")
@@ -428,6 +430,57 @@ def analyse_dice(
     print(_format_dice_score_rows_table(rows=rows))
 
 
+@analyse_app.command("map-mask")
+def analyse_map_mask(
+    registered_component_atlas: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the registered component atlas labelled segmentation NIfTI image."
+        ),
+    ],
+    scan: Annotated[
+        Path,
+        typer.Argument(help="Path to the NIfTI scan image."),
+    ],
+    *,
+    output_mask_image_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-mask-image-path",
+            "-o",
+            help=(
+                "Optional output path for the saved mask NIfTI. Defaults to "
+                "mapped_atlas_mask_<timestamp>.nii.gz in the scan parent directory."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Map all atlas labels onto a scan image and save the mapped mask.
+
+    Args:
+        registered_component_atlas: Path to the registered component atlas.
+        scan: Path to the scan NIfTI image.
+        output_mask_image_path: Optional explicit output path for the saved mask.
+    """
+    if not registered_component_atlas.exists():
+        msg = f"Registered component atlas file not found: {registered_component_atlas}"
+        raise typer.BadParameter(msg)
+    if not scan.exists():
+        msg = f"Scan file not found: {scan}"
+        raise typer.BadParameter(msg)
+
+    try:
+        saved_path = coordinate_mapped_atlas_mask(
+            registered_component_atlas_image_path=registered_component_atlas,
+            scan_image_path=scan,
+            output_mask_image_path=output_mask_image_path,
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    print(f"Saved mapped atlas mask: {saved_path}")
+
+
 @analyse_app.command("eg-mask")
 def analyse_eg_mask(
     registered_component_atlas: Annotated[
@@ -463,16 +516,14 @@ def analyse_eg_mask(
         float,
         typer.Option(
             "--minimum-sad-counts",
-            help=(
-                "Sum of Absolute Differences threshold in counts for EG mask filtering."
-            ),
+            help="Sum of Absolute Differences threshold in counts for EG mask filtering.",
         ),
     ] = _EG_MASK_MIN_SAD_COUNTS,
     dilation_iterations: Annotated[
         int,
         typer.Option(
             "--dilation-iterations",
-            help=("Number of binary dilation iterations for the EG mask."),
+            help="Number of binary dilation iterations for the EG mask.",
         ),
     ] = _EG_MASK_DILATION_ITERATIONS,
 ) -> None:
