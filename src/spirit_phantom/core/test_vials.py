@@ -11,11 +11,13 @@ import pytest
 from spirit_phantom import get_default_register_moving_image_path
 from spirit_phantom.core import vials as vials_module
 from spirit_phantom.core.vials import (
+    VIAL_SEGMENTATION_ACCURACY_TABLE_HEADERS,
     _compute_vial_statistics,
     compute_vial_statistics_details,
+    format_vial_segmentation_accuracy_table,
     format_vial_statistics_details_table,
     format_vial_statistics_table,
-    generate_dice_score_table,
+    generate_vial_segmentation_accuracy_table,
     print_vial_statistics_details_table,
     print_vial_statistics_table,
     save_vial_statistics_details_table,
@@ -281,12 +283,15 @@ def test_print_vial_statistics_details_table_writes_to_stdout(
     assert "MNCL-0320" in written
 
 
-def test_generate_dice_score_table_uses_manual_to_atlas_mapping(tmp_path: Path) -> None:
-    """Compute Dice with manual labels remapped through vial configuration."""
+def _write_manual_atlas_mapping_fixtures(
+    *,
+    tmp_path: Path,
+) -> tuple[Path, Path]:
+    """Write synthetic manual and atlas segmentations for overlap tests."""
     manual = np.zeros((6, 6, 6), dtype=np.int16)
     atlas = np.zeros((6, 6, 6), dtype=np.int16)
 
-    # Manual label 1 (vial A) should compare against atlas label 17.
+    # Manual label 1 (vial A) should compare against atlas label 17. Region area is 27.
     manual[1:4, 1:4, 1:4] = 1
     atlas[1:4, 1:4, 1:4] = 17
 
@@ -298,8 +303,16 @@ def test_generate_dice_score_table_uses_manual_to_atlas_mapping(tmp_path: Path) 
     atlas_path = tmp_path / "registered_atlas.nii.gz"
     _save_nifti(image_data=manual, output_path=manual_path)
     _save_nifti(image_data=atlas, output_path=atlas_path)
+    return manual_path, atlas_path
 
-    rows = generate_dice_score_table(
+
+def test_generate_vial_segmentation_accuracy_table_uses_manual_to_atlas_mapping(
+    tmp_path: Path,
+) -> None:
+    """Remap manual labels through vial configuration and compute overlap per vial."""
+    manual_path, atlas_path = _write_manual_atlas_mapping_fixtures(tmp_path=tmp_path)
+
+    rows = generate_vial_segmentation_accuracy_table(
         manual_segmentation_image_path=manual_path,
         registered_atlas_image_path=atlas_path,
     )
@@ -318,6 +331,65 @@ def test_generate_dice_score_table_uses_manual_to_atlas_mapping(tmp_path: Path) 
     assert row_d["manual_label"] == 4
     assert row_d["atlas_label"] == 19
     assert row_d["dice_score"] == pytest.approx(expected_row_d_dice)
+
+
+def test_generate_vial_segmentation_accuracy_table_perfect_overlap(
+    tmp_path: Path,
+) -> None:
+    """Report full sensitivity when manual and atlas vial masks match."""
+    manual_path, atlas_path = _write_manual_atlas_mapping_fixtures(tmp_path=tmp_path)
+
+    rows = generate_vial_segmentation_accuracy_table(
+        manual_segmentation_image_path=manual_path,
+        registered_atlas_image_path=atlas_path,
+    )
+
+    row_a = rows[0]
+    assert row_a["tp_voxels"] == row_a["intersection_voxels"] == 27
+    assert row_a["fn_voxels"] == 0
+    assert row_a["fp_voxels"] == 0
+    assert row_a["sensitivity"] == pytest.approx(1.0)
+    assert row_a["missed_fraction"] == pytest.approx(0.0)
+    assert row_a["specificity"] == pytest.approx(1.0)
+
+
+def test_generate_vial_segmentation_accuracy_table_partial_overlap(
+    tmp_path: Path,
+) -> None:
+    """Report missed manual voxels when atlas coverage is incomplete."""
+    manual_path, atlas_path = _write_manual_atlas_mapping_fixtures(tmp_path=tmp_path)
+
+    rows = generate_vial_segmentation_accuracy_table(
+        manual_segmentation_image_path=manual_path,
+        registered_atlas_image_path=atlas_path,
+    )
+
+    row_d = rows[3]
+    assert row_d["tp_voxels"] == 4
+    assert row_d["fn_voxels"] == 4
+    assert row_d["fp_voxels"] == 0
+    assert row_d["tn_voxels"] == 208
+    assert row_d["sensitivity"] == pytest.approx(0.5)
+    assert row_d["missed_fraction"] == pytest.approx(0.5)
+    assert row_d["specificity"] == pytest.approx(1.0)
+
+
+def test_format_vial_segmentation_accuracy_table_renders_headers(
+    tmp_path: Path,
+) -> None:
+    """Render extended segmentation accuracy columns in table output."""
+    manual_path, atlas_path = _write_manual_atlas_mapping_fixtures(tmp_path=tmp_path)
+    rows = generate_vial_segmentation_accuracy_table(
+        manual_segmentation_image_path=manual_path,
+        registered_atlas_image_path=atlas_path,
+    )
+
+    table = format_vial_segmentation_accuracy_table(rows=rows)
+
+    for header in VIAL_SEGMENTATION_ACCURACY_TABLE_HEADERS:
+        assert header in table
+    assert "sensitivity" in table
+    assert "missed_fraction" in table
 
 
 def test_compute_vial_statistics_uses_real_atlas_data(tmp_path: Path) -> None:

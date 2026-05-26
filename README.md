@@ -174,10 +174,10 @@ uv run spirit-phantom analyse vial-measurements \
   --output-directory path/to/analysis_output
 ```
 
-Atomic Dice analysis (prints a per-vial table with label mapping and voxel overlap):
+Vial segmentation accuracy (per-vial confusion metrics; manual segmentation is ground truth):
 
 ```bash
-uv run spirit-phantom analyse dice \
+uv run spirit-phantom analyse vials \
   path/to/manual_segmentation.nii.gz \
   path/to/registration_output/Bspline_Image.nii.gz
 ```
@@ -185,39 +185,20 @@ uv run spirit-phantom analyse dice \
 Example command (Windows relative paths):
 
 ```powershell
-uv run spirit-phantom analyse dice `
+uv run spirit-phantom analyse vials `
   \path\to\manually\segmented\vials `
   \path\to\registered\atlas `
 ```
 
-Example output:
+Example output (columns truncated for readability):
 
 ```text
-vial_id | manual_label | atlas_label | dice_score | manual_voxels | atlas_voxels | intersection_voxels
---------+--------------+-------------+------------+---------------+--------------+--------------------
-A       | 1            | 17          | 0.953306   | 71937         | 68809        | 67087
-B       | 2            | 18          | 0.935174   | 72022         | 67798        | 65378
-C       | 3            | 20          | 0.883508   | 83733         | 66706        | 66457
-D       | 4            | 19          | 0.912901   | 79834         | 67952        | 67457
-E       | 5            | 11          | 0.793889   | 31786         | 21884        | 21304
-F       | 6            | 14          | 0.745040   | 28619         | 23099        | 19266
-G       | 7            | 13          | 0.850703   | 26287         | 22696        | 20835
-H       | 8            | 10          | 0.805932   | 26067         | 22751        | 19672
-I       | 9            | 6           | 0.871800   | 25312         | 22582        | 20877
-J       | 10           | 3           | 0.868149   | 21747         | 23577        | 19674
-K       | 11           | 4           | 0.874160   | 28492         | 23153        | 22573
-L       | 12           | 7           | 0.779448   | 25042         | 23128        | 18773
-M       | 13           | 12          | 0.922296   | 21461         | 23067        | 20534
-N       | 14           | 16          | 0.886580   | 25631         | 23064        | 21586
-O       | 15           | 15          | 0.889272   | 24369         | 22656        | 20909
-P       | 16           | 9           | 0.785631   | 27937         | 21529        | 19431
-Q       | 17           | 5           | 0.841078   | 27870         | 21607        | 20807
-R       | 18           | 1           | 0.886068   | 24611         | 22110        | 20699
-S       | 19           | 2           | 0.857560   | 28164         | 22510        | 21728
-T       | 20           | 8           | 0.883388   | 25756         | 21752        | 20984
+vial_id | manual_label | atlas_label | dice_score | manual_voxels | atlas_voxels | intersection_voxels | tp_voxels | fp_voxels | fn_voxels | tn_voxels | sensitivity | specificity | missed_fraction
+--------+--------------+-------------+------------+---------------+--------------+---------------------+-----------+-----------+-----------+-----------+-------------+-------------+----------------
+A       | 1            | 17          | 0.953306   | 71937         | 68809        | 67087               | 67087     | 1722      | 4850      | ...       | 0.932596    | 0.999975    | 0.067404
 ```
 
-The `analyse dice` command expects:
+The `analyse vials` command expects:
 
 - A manual segmentation where labels `1..20` represent vials `A..T`.
 - A registered atlas segmentation aligned to the same shape.
@@ -225,15 +206,20 @@ The `analyse dice` command expects:
 The output table includes:
 
 - `vial_id`, `manual_label`, `atlas_label`
-- `dice_score`
-- `manual_voxels`, `atlas_voxels`, `intersection_voxels`
+- `dice_score`, `manual_voxels`, `atlas_voxels`, `intersection_voxels`
+- `tp_voxels`, `fp_voxels`, `fn_voxels`, `tn_voxels` — per-vial confusion counts against the full volume
+- `sensitivity` — fraction of manual vial voxels detected by the atlas (`tp / manual_voxels`)
+- `specificity` — fraction of non-manual voxels correctly not labelled as this vial by the atlas (`tn / (tn + fp)`)
+- `missed_fraction` — fraction of manual vial voxels missed by the atlas (`fn / manual_voxels`, equal to `1 - sensitivity`)
 
 Interpretation notes:
 
 - `dice_score` ranges from `0` (no overlap) to `1` (perfect overlap).
 - `manual_label` and `atlas_label` show which connected components were matched for each vial.
-- `intersection_voxels` is the overlap used in the Dice calculation.
-- A lower Dice score with large voxel count differences can indicate local misregistration or segmentation mismatch.
+- `intersection_voxels` and `tp_voxels` are identical (voxel overlap between manual and atlas masks).
+- High `specificity` (for example `0.99`) means atlas false positives for that vial are rare outside the manual ROI.
+- A higher `missed_fraction` (for example `0.50`) means half of the manual vial voxels were not captured by the registered atlas mask, even when `dice_score` remains moderate.
+- A lower `dice_score` with large voxel count differences can indicate local misregistration or segmentation mismatch.
 
 If the two images have different shapes, the command exits with a clear validation error.
 

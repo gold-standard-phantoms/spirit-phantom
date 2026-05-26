@@ -6,15 +6,16 @@ The registration command defaults to a SPIRIT atlas image downloaded with
 The ``analyse`` command group includes:
 
 - ``vial-measurements`` for per-vial intensity statistics.
-- ``dice`` for per-vial overlap scores between manual and atlas labels.
+- ``vials`` for per-vial segmentation accuracy metrics (manual vs atlas).
 - ``eg-mask`` for ethylene glycol vial mask generation from multi-echo data.
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 import typer
 
@@ -164,52 +165,41 @@ def _generate_checkerboard_images(
     )
 
 
-def _format_dice_score_rows_table(
-    *, rows: Sequence[dict[str, int | str | float]]
-) -> str:
-    """Format per-vial Dice score rows into a readable text table.
+def _run_vial_segmentation_accuracy_analysis(
+    *,
+    manual_segmentation_image_path: Path,
+    registered_atlas_image_path: Path,
+) -> None:
+    """Load segmentations, compute per-vial metrics, and print the results table.
 
     Args:
-        rows: Rows returned by ``generate_dice_score_table`` containing vial ID,
-            manual/atlas labels, Dice score, and voxel count fields.
+        manual_segmentation_image_path: Path to the manual labelled segmentation.
+        registered_atlas_image_path: Path to the registered atlas segmentation.
 
-    Returns:
-        Table string suitable for command-line output.
+    Raises:
+        typer.BadParameter: If paths are missing or validation fails.
     """
-    headers = [
-        "vial_id",
-        "manual_label",
-        "atlas_label",
-        "dice_score",
-        "manual_voxels",
-        "atlas_voxels",
-        "intersection_voxels",
-    ]
+    from spirit_phantom.core.vials import (  # noqa: PLC0415
+        format_vial_segmentation_accuracy_table,
+        generate_vial_segmentation_accuracy_table,
+    )
 
-    def _cell_to_text(*, value: Any) -> str:
-        if isinstance(value, float):
-            return f"{value:.6f}"
-        return str(value)
+    if not manual_segmentation_image_path.exists():
+        msg = f"Manual segmentation file not found: {manual_segmentation_image_path}"
+        raise typer.BadParameter(msg)
+    if not registered_atlas_image_path.exists():
+        msg = f"Registered atlas file not found: {registered_atlas_image_path}"
+        raise typer.BadParameter(msg)
 
-    table_rows = [
-        [_cell_to_text(value=row.get(header, "")) for header in headers] for row in rows
-    ]
-    all_rows = [headers, *table_rows]
-    column_widths = [
-        max(len(row[column_index]) for row in all_rows)
-        for column_index in range(len(headers))
-    ]
-
-    def _format_line(*, cells: list[str]) -> str:
-        return " | ".join(
-            cell.ljust(column_width)
-            for cell, column_width in zip(cells, column_widths, strict=True)
+    try:
+        rows = generate_vial_segmentation_accuracy_table(
+            manual_segmentation_image_path=manual_segmentation_image_path,
+            registered_atlas_image_path=registered_atlas_image_path,
         )
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
 
-    separator = "-+-".join("-" * width for width in column_widths)
-    lines = [_format_line(cells=headers), separator]
-    lines.extend(_format_line(cells=row) for row in table_rows)
-    return "\n".join(lines)
+    print(format_vial_segmentation_accuracy_table(rows=rows))
 
 
 @app.command()
@@ -386,8 +376,8 @@ def analyse_vial_measurements(
     )
 
 
-@analyse_app.command("dice")
-def analyse_dice(
+@analyse_app.command("vials")
+def analyse_vials(
     manual_segmentation_image_path: Annotated[
         Path,
         typer.Argument(help="Path to the manual labelled segmentation image."),
@@ -399,7 +389,11 @@ def analyse_dice(
         ),
     ],
 ) -> None:
-    """Compute and print a per-vial Dice score table.
+    """Compute and print per-vial segmentation accuracy metrics.
+
+    Compares manual segmentation (ground truth) to the registered atlas per vial.
+    The table includes overlap counts, confusion counts (TP/FP/FN/TN), sensitivity,
+    specificity, and missed fraction.
 
     Args:
         manual_segmentation_image_path: Path to the manual labelled
@@ -407,24 +401,10 @@ def analyse_dice(
         registered_atlas_image_path: Path to the registered atlas labelled
             segmentation using configured atlas segment indices.
     """
-    from spirit_phantom.core.vials import generate_dice_score_table  # noqa: PLC0415
-
-    if not manual_segmentation_image_path.exists():
-        msg = f"Manual segmentation file not found: {manual_segmentation_image_path}"
-        raise typer.BadParameter(msg)
-    if not registered_atlas_image_path.exists():
-        msg = f"Registered atlas file not found: {registered_atlas_image_path}"
-        raise typer.BadParameter(msg)
-
-    try:
-        rows = generate_dice_score_table(
-            manual_segmentation_image_path=manual_segmentation_image_path,
-            registered_atlas_image_path=registered_atlas_image_path,
-        )
-    except ValueError as error:
-        raise typer.BadParameter(str(error)) from error
-
-    print(_format_dice_score_rows_table(rows=rows))
+    _run_vial_segmentation_accuracy_analysis(
+        manual_segmentation_image_path=manual_segmentation_image_path,
+        registered_atlas_image_path=registered_atlas_image_path,
+    )
 
 
 @analyse_app.command("eg-mask")
