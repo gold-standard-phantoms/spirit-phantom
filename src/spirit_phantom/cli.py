@@ -7,14 +7,16 @@ The ``analyse`` command group includes:
 
 - ``vial-measurements`` for per-vial intensity statistics.
 - ``dice`` for per-vial overlap scores between manual and atlas labels.
+- ``vials`` for per-vial segmentation accuracy metrics (manual vs atlas).
 - ``eg-mask`` for ethylene glycol vial mask generation from multi-echo data.
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
@@ -24,6 +26,9 @@ from spirit_phantom.core.multi_echo_thermometry import (
     _EG_MASK_MIN_SAD_COUNTS,
     coordinate_ethylene_glycol_vial_segmentation,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 app = typer.Typer(help="SPIRIT phantom command line tools.")
 analyse_app = typer.Typer(help="Run analyses on registered phantom data.")
@@ -210,6 +215,43 @@ def _format_dice_score_rows_table(
     lines = [_format_line(cells=headers), separator]
     lines.extend(_format_line(cells=row) for row in table_rows)
     return "\n".join(lines)
+
+
+def _run_vial_segmentation_accuracy_analysis(
+    *,
+    manual_segmentation_image_path: Path,
+    registered_atlas_image_path: Path,
+) -> None:
+    """Load segmentations, compute per-vial metrics, and print the results table.
+
+    Args:
+        manual_segmentation_image_path: Path to the manual labelled segmentation.
+        registered_atlas_image_path: Path to the registered atlas segmentation.
+
+    Raises:
+        typer.BadParameter: If paths are missing or validation fails.
+    """
+    from spirit_phantom.core.vials import (  # noqa: PLC0415
+        format_vial_segmentation_accuracy_table,
+        generate_vial_segmentation_accuracy_table,
+    )
+
+    if not manual_segmentation_image_path.exists():
+        msg = f"Manual segmentation file not found: {manual_segmentation_image_path}"
+        raise typer.BadParameter(msg)
+    if not registered_atlas_image_path.exists():
+        msg = f"Registered atlas file not found: {registered_atlas_image_path}"
+        raise typer.BadParameter(msg)
+
+    try:
+        rows = generate_vial_segmentation_accuracy_table(
+            manual_segmentation_image_path=manual_segmentation_image_path,
+            registered_atlas_image_path=registered_atlas_image_path,
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    print(format_vial_segmentation_accuracy_table(rows=rows))
 
 
 @app.command()
@@ -425,6 +467,37 @@ def analyse_dice(
         raise typer.BadParameter(str(error)) from error
 
     print(_format_dice_score_rows_table(rows=rows))
+
+
+@analyse_app.command("vials")
+def analyse_vials(
+    manual_segmentation_image_path: Annotated[
+        Path,
+        typer.Argument(help="Path to the manual labelled segmentation image."),
+    ],
+    registered_atlas_image_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the registered atlas labelled segmentation image."
+        ),
+    ],
+) -> None:
+    """Compute and print per-vial segmentation accuracy metrics.
+
+    Compares manual segmentation (ground truth) to the registered atlas per vial.
+    The table includes false positive and false negative rates, overlap counts,
+    confusion counts (TP/FP/FN/TN), sensitivity, and specificity.
+
+    Args:
+        manual_segmentation_image_path: Path to the manual labelled
+            segmentation where labels 1..20 map to vials A..T.
+        registered_atlas_image_path: Path to the registered atlas labelled
+            segmentation using configured atlas segment indices.
+    """
+    _run_vial_segmentation_accuracy_analysis(
+        manual_segmentation_image_path=manual_segmentation_image_path,
+        registered_atlas_image_path=registered_atlas_image_path,
+    )
 
 
 @analyse_app.command("eg-mask")

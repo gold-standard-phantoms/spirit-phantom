@@ -22,6 +22,13 @@ Example of the post-registration steps to produce a detailed table of vial stati
         output_path=output_path,
     )
 
+Example of comparing manual and registered-atlas vial segmentations:
+    accuracy_rows = generate_vial_segmentation_accuracy_table(
+        manual_segmentation_image_path=manual_segmentation_path,
+        registered_atlas_image_path=registered_atlas_path,
+    )
+    print(format_vial_segmentation_accuracy_table(rows=accuracy_rows))
+
 
 Note, an internal function `_compute_vial_statistics` is used to compute the vial statistics
 indexed using values that are convenient for modelling and design. These are re-mapped to the
@@ -534,26 +541,63 @@ def print_vial_statistics_table(
     print(format_vial_statistics_table(rows=rows), file=file)
 
 
-def generate_dice_score_table(
+DICE_SCORE_TABLE_HEADERS: tuple[str, ...] = (
+    "vial_id",
+    "manual_label",
+    "atlas_label",
+    "dice_score",
+    "manual_voxels",
+    "atlas_voxels",
+    "intersection_voxels",
+)
+
+VIAL_SEGMENTATION_ACCURACY_TABLE_HEADERS: tuple[str, ...] = (
+    "vial_id",
+    "manual_label",
+    "atlas_label",
+    "dice_score",
+    "fpr",
+    "fnr",
+    "manual_voxels",
+    "atlas_voxels",
+    "intersection_voxels",
+    "tp_voxels",
+    "fp_voxels",
+    "fn_voxels",
+    "tn_voxels",
+    "sensitivity",
+    "specificity",
+)
+
+
+def _safe_divide(*, numerator: float, denominator: int) -> float:
+    """Divide safely, returning NaN when the denominator is zero.
+
+    Args:
+        numerator: Dividend.
+        denominator: Divisor.
+
+    Returns:
+        ``numerator / denominator``, or ``nan`` when ``denominator`` is zero.
+    """
+    if denominator == 0:
+        return float("nan")
+    return float(numerator / denominator)
+
+
+def _load_aligned_segmentation_arrays(
     *,
     manual_segmentation_image_path: Path,
     registered_atlas_image_path: Path,
-) -> list[dict[str, int | str | float]]:
-    """Generate per-vial Dice scores using manual-to-atlas vial remapping.
-
-    The manual segmentation labels are expected to use vial order A..T as
-    intensities 1..20. The registered atlas uses segment indices from vial
-    configuration, so each manual label is remapped via ``vial_id`` before Dice
-    calculation.
+) -> tuple[IntArray, IntArray, list[VialConfiguration]]:
+    """Load manual and atlas segmentations and validate mapping prerequisites.
 
     Args:
         manual_segmentation_image_path: Path to manual segmentation NIfTI.
         registered_atlas_image_path: Path to registered atlas NIfTI.
 
     Returns:
-        Per-vial rows containing vial metadata and Dice components:
-        ``vial_id``, ``manual_label``, ``atlas_label``, ``dice_score``,
-        ``manual_voxels``, ``atlas_voxels``, and ``intersection_voxels``.
+        Manual data, atlas data, and vial configurations ordered by ``vial_id``.
 
     Raises:
         ValueError: If image dimensions mismatch or vial mapping is invalid.
@@ -586,34 +630,229 @@ def generate_dice_score_table(
         )
         raise ValueError(msg)
 
+    return manual_data, atlas_data, ordered_configurations
+
+
+def _compute_vial_overlap_metrics(
+    *,
+    manual_data: IntArray,
+    atlas_data: IntArray,
+    manual_label: int,
+    atlas_label: int,
+    total_voxels: int,
+) -> dict[str, int | float]:
+    """Compute per-vial overlap counts and classification rates.
+
+    Manual segmentation is ground truth; the registered atlas is the prediction
+    for each vial's binary mask. Confusion counts are voxel cardinalities over
+    the full shared volume. Rates are NaN when their denominator is zero.
+
+    Args:
+        manual_data: Manual segmentation volume.
+        atlas_data: Registered atlas segmentation volume.
+        manual_label: Manual segmentation label for the vial.
+        atlas_label: Atlas segment index for the vial.
+        total_voxels: Total voxels in the shared volume.
+
+    Returns:
+        Per-vial counts and rates including ``dice_score``, ``manual_voxels``,
+        ``atlas_voxels``, ``intersection_voxels``, ``tp_voxels``, ``fp_voxels``,
+        ``fn_voxels``, ``tn_voxels``, ``sensitivity``, ``specificity``, ``fpr``,
+        and ``fnr``.
+    """
+    manual_mask = manual_data == manual_label
+    atlas_mask = atlas_data == atlas_label
+
+    manual_voxels = int(np.count_nonzero(manual_mask))
+    atlas_voxels = int(np.count_nonzero(atlas_mask))
+    tp_voxels = int(np.count_nonzero(manual_mask & atlas_mask))
+    fn_voxels = manual_voxels - tp_voxels
+    fp_voxels = atlas_voxels - tp_voxels
+    tn_voxels = total_voxels - manual_voxels - atlas_voxels + tp_voxels
+
+    dice_denominator = manual_voxels + atlas_voxels
+    dice_score = _safe_divide(
+        numerator=2.0 * tp_voxels,
+        denominator=dice_denominator,
+    )
+    sensitivity = _safe_divide(numerator=float(tp_voxels), denominator=manual_voxels)
+    specificity = _safe_divide(
+        numerator=float(tn_voxels),
+        denominator=tn_voxels + fp_voxels,
+    )
+    fpr = _safe_divide(
+        numerator=float(fp_voxels),
+        denominator=fp_voxels + tn_voxels,
+    )
+    fnr = _safe_divide(numerator=float(fn_voxels), denominator=manual_voxels)
+
+    return {
+        "fpr": fpr,
+        "fnr": fnr,
+        "dice_score": dice_score,
+        "manual_voxels": manual_voxels,
+        "atlas_voxels": atlas_voxels,
+        "intersection_voxels": tp_voxels,
+        "tp_voxels": tp_voxels,
+        "fp_voxels": fp_voxels,
+        "fn_voxels": fn_voxels,
+        "tn_voxels": tn_voxels,
+        "sensitivity": sensitivity,
+        "specificity": specificity,
+    }
+
+
+def generate_dice_score_table(
+    *,
+    manual_segmentation_image_path: Path,
+    registered_atlas_image_path: Path,
+) -> list[dict[str, int | str | float]]:
+    """Generate per-vial Dice scores using manual-to-atlas vial remapping.
+
+    The manual segmentation labels are expected to use vial order A..T as
+    intensities 1..20. The registered atlas uses segment indices from vial
+    configuration, so each manual label is remapped via ``vial_id`` before Dice
+    calculation.
+
+    Args:
+        manual_segmentation_image_path: Path to manual segmentation NIfTI.
+        registered_atlas_image_path: Path to registered atlas NIfTI.
+
+    Returns:
+        Per-vial rows containing vial metadata and Dice components:
+        ``vial_id``, ``manual_label``, ``atlas_label``, ``dice_score``,
+        ``manual_voxels``, ``atlas_voxels``, and ``intersection_voxels``.
+
+    Raises:
+        ValueError: If image dimensions mismatch or vial mapping is invalid.
+        FileNotFoundError: If either input NIfTI path does not exist.
+    """
+    manual_data, atlas_data, ordered_configurations = _load_aligned_segmentation_arrays(
+        manual_segmentation_image_path=manual_segmentation_image_path,
+        registered_atlas_image_path=registered_atlas_image_path,
+    )
+    total_voxels = int(manual_data.size)
+
     rows: list[dict[str, int | str | float]] = []
     for manual_label in DEFAULT_VIAL_LABELS:
         configuration = ordered_configurations[manual_label - 1]
         atlas_label = int(configuration.segment_index)
-
-        manual_mask = manual_data == manual_label
-        atlas_mask = atlas_data == atlas_label
-
-        manual_voxels = int(np.count_nonzero(manual_mask))
-        atlas_voxels = int(np.count_nonzero(atlas_mask))
-        intersection_voxels = int(np.count_nonzero(manual_mask & atlas_mask))
-        denominator = manual_voxels + atlas_voxels
-        dice_score = (
-            float("nan")
-            if denominator == 0
-            else float((2.0 * intersection_voxels) / denominator)
+        metrics = _compute_vial_overlap_metrics(
+            manual_data=manual_data,
+            atlas_data=atlas_data,
+            manual_label=manual_label,
+            atlas_label=atlas_label,
+            total_voxels=total_voxels,
         )
-
         rows.append(
             {
                 "vial_id": configuration.vial_id,
                 "manual_label": manual_label,
                 "atlas_label": atlas_label,
-                "dice_score": dice_score,
-                "manual_voxels": manual_voxels,
-                "atlas_voxels": atlas_voxels,
-                "intersection_voxels": intersection_voxels,
+                "dice_score": metrics["dice_score"],
+                "manual_voxels": metrics["manual_voxels"],
+                "atlas_voxels": metrics["atlas_voxels"],
+                "intersection_voxels": metrics["intersection_voxels"],
             }
         )
 
     return rows
+
+
+def generate_vial_segmentation_accuracy_table(
+    *,
+    manual_segmentation_image_path: Path,
+    registered_atlas_image_path: Path,
+) -> list[dict[str, int | str | float]]:
+    """Generate per-vial segmentation accuracy metrics.
+
+    The manual segmentation labels are expected to use vial order A..T as
+    intensities 1..20. The registered atlas uses segment indices from vial
+    configuration, so each manual label is remapped via ``vial_id`` before
+    overlap and classification metrics are calculated. Manual segmentation is
+    treated as ground truth.
+
+    Args:
+        manual_segmentation_image_path: Path to manual segmentation NIfTI.
+        registered_atlas_image_path: Path to registered atlas NIfTI.
+
+    Returns:
+        Per-vial rows containing overlap, confusion counts, and rates:
+        ``vial_id``, ``manual_label``, ``atlas_label``, ``dice_score``, ``fpr``,
+        ``fnr``, ``manual_voxels``, ``atlas_voxels``, ``intersection_voxels``,
+        ``tp_voxels``, ``fp_voxels``, ``fn_voxels``, ``tn_voxels``,
+        ``sensitivity``, and ``specificity``.
+
+    Raises:
+        ValueError: If image dimensions mismatch or vial mapping is invalid.
+        FileNotFoundError: If either input NIfTI path does not exist.
+    """
+    manual_data, atlas_data, ordered_configurations = _load_aligned_segmentation_arrays(
+        manual_segmentation_image_path=manual_segmentation_image_path,
+        registered_atlas_image_path=registered_atlas_image_path,
+    )
+    total_voxels = int(manual_data.size)
+
+    rows: list[dict[str, int | str | float]] = []
+    for manual_label in DEFAULT_VIAL_LABELS:
+        configuration = ordered_configurations[manual_label - 1]
+        atlas_label = int(configuration.segment_index)
+        metrics = _compute_vial_overlap_metrics(
+            manual_data=manual_data,
+            atlas_data=atlas_data,
+            manual_label=manual_label,
+            atlas_label=atlas_label,
+            total_voxels=total_voxels,
+        )
+        rows.append(
+            {
+                "vial_id": configuration.vial_id,
+                "manual_label": manual_label,
+                "atlas_label": atlas_label,
+                **metrics,
+            }
+        )
+
+    return rows
+
+
+def format_vial_segmentation_accuracy_table(
+    *, rows: Sequence[dict[str, int | str | float]]
+) -> str:
+    """Format per-vial segmentation accuracy rows into a readable text table.
+
+    Args:
+        rows: Rows returned by ``generate_vial_segmentation_accuracy_table``.
+
+    Returns:
+        Multi-line table string suitable for CLI output.
+    """
+    headers = VIAL_SEGMENTATION_ACCURACY_TABLE_HEADERS
+
+    def _cell_to_text(*, value: Any) -> str:
+        if isinstance(value, float):
+            return _format_float_cell(value=value)
+        return str(value)
+
+    table_rows = [
+        [_cell_to_text(value=row.get(header, "")) for header in headers] for row in rows
+    ]
+    if not table_rows:
+        return "No vial segmentation accuracy rows were returned."
+
+    all_rows = [headers, *table_rows]
+    column_widths = [
+        max(len(row[column_index]) for row in all_rows)
+        for column_index in range(len(headers))
+    ]
+
+    def _format_line(*, cells: Sequence[str]) -> str:
+        return " | ".join(
+            cell.ljust(column_width)
+            for cell, column_width in zip(cells, column_widths, strict=True)
+        )
+
+    separator = "-+-".join("-" * width for width in column_widths)
+    lines = [_format_line(cells=headers), separator]
+    lines.extend(_format_line(cells=row) for row in table_rows)
+    return "\n".join(lines)
