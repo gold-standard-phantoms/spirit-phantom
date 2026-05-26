@@ -83,7 +83,7 @@ The CLI supports both atomic and combined workflows:
 
 - Register once, then run one or more analysis commands.
 - Register and immediately run analysis in one command.
-- Run standalone analysis commands such as per-vial Dice scoring.
+- Run standalone analysis commands such as per-vial Dice scoring and segmentation accuracy.
 
 #### Registration
 
@@ -174,20 +174,25 @@ uv run spirit-phantom analyse vial-measurements \
   --output-directory path/to/analysis_output
 ```
 
+Per-vial segmentation comparison (`analyse dice` and `analyse vials` share the same inputs).
+Use a manual mask drawn on the scanner image and the registered component atlas labels
+from registration output (`transformed_component_atlas.nii.gz`, not the signal-only
+`Bspline_Image.nii.gz`).
+
 Atomic Dice analysis (prints a per-vial table with label mapping and voxel overlap):
 
 ```bash
 uv run spirit-phantom analyse dice \
   path/to/manual_segmentation.nii.gz \
-  path/to/registration_output/Bspline_Image.nii.gz
+  path/to/registration_output/transformed_component_atlas.nii.gz
 ```
 
 Example command (Windows relative paths):
 
-```powershell
-uv run spirit-phantom analyse dice `
-  \path\to\manually\segmented\vials `
-  \path\to\registered\atlas `
+```bash
+uv run spirit-phantom analyse dice \
+  path/to/manual_segmentation.nii.gz \
+  path/to/registration_output\transformed_component_atlas.nii.gz
 ```
 
 Example output:
@@ -219,8 +224,8 @@ T       | 20           | 8           | 0.883388   | 25756         | 21752       
 
 The `analyse dice` command expects:
 
-- A manual segmentation where labels `1..20` represent vials `A..T`.
-- A registered atlas segmentation aligned to the same shape.
+- Manual segmentation in scanner (fixed) image space where labels `1..20` represent vials `A..T`.
+- Registered component atlas segmentation in the same scanner space (`transformed_component_atlas.nii.gz` from `register`), on the same voxel grid as the manual mask.
 
 The output table includes:
 
@@ -234,6 +239,52 @@ Interpretation notes:
 - `manual_label` and `atlas_label` show which connected components were matched for each vial.
 - `intersection_voxels` is the overlap used in the Dice calculation.
 - A lower Dice score with large voxel count differences can indicate local misregistration or segmentation mismatch.
+
+If the two images have different shapes, the command exits with a clear validation error.
+
+Vial segmentation accuracy (per-vial confusion metrics; manual segmentation is ground truth):
+
+```bash
+uv run spirit-phantom analyse vials \
+  path/to/manual_segmentation.nii.gz \
+  path/to/registration_output/transformed_component_atlas.nii.gz
+```
+
+Example command (Windows relative paths):
+
+```powershell
+uv run spirit-phantom analyse vials `
+  path\to\manual_segmentation.nii.gz `
+  path\to\registration_output\transformed_component_atlas.nii.gz
+```
+
+Example output (columns and rows truncated for readability):
+
+```text
+vial_id | manual_label | atlas_label | dice_score | fpr      | fnr      | ... | sensitivity | specificity
+--------+--------------+-------------+------------+----------+----------+-----+-------------+-------------
+A       | 1            | 17          | 0.953306   | 0.000025 | 0.067404 | ... | 0.932596    | 0.999975
+...
+
+```
+
+The `analyse vials` command expects the same inputs as `analyse dice` (see above).
+
+The output table includes:
+
+- `vial_id`, `manual_label`, `atlas_label`, `dice_score`
+- `fpr`, `fnr` — false positive and false negative rates for the vial mask
+- `manual_voxels`, `atlas_voxels`, `intersection_voxels`
+- `tp_voxels`, `fp_voxels`, `fn_voxels`, `tn_voxels` — per-vial confusion counts against the full volume
+- `sensitivity` — fraction of manual vial voxels detected by the atlas (`tp / manual_voxels`)
+- `specificity` — fraction of non-manual voxels correctly not labelled as this vial by the atlas (`tn / (tn + fp)`)
+
+Interpretation notes:
+
+- `fpr` is `fp / (fp + tn)`; `fnr` is `fn / manual_voxels` (equal to `1 - sensitivity`).
+- `intersection_voxels` and `tp_voxels` are identical (voxel overlap between manual and atlas masks).
+- High `specificity` (for example `0.99`) means atlas false positives for that vial are rare outside the manual ROI.
+- A higher `fnr` (for example `0.50`) means half of the manual vial voxels were not captured by the registered atlas mask, even when `dice_score` remains moderate.
 
 If the two images have different shapes, the command exits with a clear validation error.
 
