@@ -179,6 +179,24 @@
       "vial_size": "4 ml",
       "si_traceable_characterisation_available": ["T1", "T2"],
       "segment_index": 8
+    },
+    {
+      "vial_id": "U",
+      "type": "Thermometry",
+      "product_code": "EG-THERM-01",
+      "description": "Ethylene glycol thermometry vial U",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": [],
+      "segment_index": 21
+    },
+    {
+      "vial_id": "V",
+      "type": "Thermometry",
+      "product_code": "EG-THERM-02",
+      "description": "Ethylene glycol thermometry vial V",
+      "vial_size": "4 ml",
+      "si_traceable_characterisation_available": [],
+      "segment_index": 22
     }
   ]
 }

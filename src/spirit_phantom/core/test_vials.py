@@ -158,7 +158,7 @@ def test_print_vial_statistics_table_writes_to_stdout(
 
 
 def test_compute_vial_statistics_details_returns_expected_rows(tmp_path: Path) -> None:
-    """Return detailed vial rows in A-to-T order with metadata columns."""
+    """Return detailed vial rows in A-to-V order with metadata columns."""
     atlas = np.zeros((5, 5, 5), dtype=np.int16)
     atlas[1:4, 1:4, 1:4] = 17
     atlas[0:1, 0:2, 0:2] = 18
@@ -184,9 +184,9 @@ def test_compute_vial_statistics_details_returns_expected_rows(tmp_path: Path) -
         erosion_voxels=0,
     )
 
-    assert len(rows) == 20
+    assert len(rows) == 22
     row_ids = [row.vial_id for row in rows]
-    assert row_ids == [chr(code) for code in range(ord("A"), ord("T") + 1)]
+    assert row_ids == [chr(code) for code in range(ord("A"), ord("V") + 1)]
 
     row_a = rows[0]
     row_b = rows[1]
@@ -292,6 +292,12 @@ def _write_manual_atlas_mapping_fixtures(
     manual = np.zeros((6, 6, 6), dtype=np.int16)
     atlas = np.zeros((6, 6, 6), dtype=np.int16)
 
+    # Manual labels 21 (U) and 22 (V) map to atlas segment indices 21 and 22.
+    manual[0:2, 4:6, 0:2] = 21
+    atlas[0:2, 4:6, 0:2] = 21
+    manual[0:2, 0:2, 5:6] = 22
+    atlas[0:2, 0:2, 5:6] = 22
+
     # Manual label 1 (vial A) should compare against atlas label 17. Region area is 27.
     manual[1:4, 1:4, 1:4] = 1
     atlas[1:4, 1:4, 1:4] = 17
@@ -318,7 +324,7 @@ def test_generate_dice_score_table_uses_manual_to_atlas_mapping(
         registered_atlas_image_path=atlas_path,
     )
 
-    assert len(rows) == 20
+    assert len(rows) == 22
 
     row_a = rows[0]
     assert row_a["vial_id"] == "A"
@@ -333,6 +339,18 @@ def test_generate_dice_score_table_uses_manual_to_atlas_mapping(
     assert row_d["atlas_label"] == 19
     assert row_d["dice_score"] == pytest.approx(expected_row_d_dice)
 
+    row_u = rows[20]
+    assert row_u["vial_id"] == "U"
+    assert row_u["manual_label"] == 21
+    assert row_u["atlas_label"] == 21
+    assert row_u["dice_score"] == pytest.approx(1.0)
+
+    row_v = rows[21]
+    assert row_v["vial_id"] == "V"
+    assert row_v["manual_label"] == 22
+    assert row_v["atlas_label"] == 22
+    assert row_v["dice_score"] == pytest.approx(1.0)
+
 
 def test_generate_vial_segmentation_accuracy_table_uses_manual_to_atlas_mapping(
     tmp_path: Path,
@@ -345,7 +363,7 @@ def test_generate_vial_segmentation_accuracy_table_uses_manual_to_atlas_mapping(
         registered_atlas_image_path=atlas_path,
     )
 
-    assert len(rows) == 20
+    assert len(rows) == 22
 
     row_a = rows[0]
     assert row_a["vial_id"] == "A"
@@ -380,6 +398,15 @@ def test_generate_vial_segmentation_accuracy_table_perfect_overlap(
     assert row_a["fnr"] == pytest.approx(0.0)
     assert row_a["fpr"] == pytest.approx(0.0)
     assert row_a["specificity"] == pytest.approx(1.0)
+
+    row_u = rows[20]
+    assert row_u["tp_voxels"] == 8
+    assert row_u["fnr"] == pytest.approx(0.0)
+    assert row_u["fpr"] == pytest.approx(0.0)
+
+    row_v = rows[21]
+    assert row_v["tp_voxels"] == 4
+    assert row_v["fnr"] == pytest.approx(0.0)
 
 
 def test_generate_vial_segmentation_accuracy_table_partial_overlap(

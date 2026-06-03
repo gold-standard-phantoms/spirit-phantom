@@ -516,7 +516,7 @@ def analyse_dice(
         Path,
         typer.Argument(
             help=(
-                "Manual vial segmentation (labels 1..20 for vials A..T) in "
+                "Manual vial segmentation (labels 1..22 for vials A..V) in "
                 "scanner (fixed) image space."
             ),
         ),
@@ -535,7 +535,7 @@ def analyse_dice(
 
     Args:
         manual_segmentation_image_path: Manual segmentation on the scanner image
-            where labels 1..20 map to vials A..T.
+            where labels 1..22 map to vials A..V (21=U, 22=V).
         registered_atlas_image_path: Labelled component atlas warped into scanner
             space (configured atlas segment indices per vial).
     """
@@ -565,7 +565,7 @@ def analyse_vials(
         Path,
         typer.Argument(
             help=(
-                "Manual vial segmentation (labels 1..20 for vials A..T) in "
+                "Manual vial segmentation (labels 1..22 for vials A..V) in "
                 "scanner (fixed) image space."
             ),
         ),
@@ -588,7 +588,7 @@ def analyse_vials(
 
     Args:
         manual_segmentation_image_path: Manual segmentation on the scanner image
-            where labels 1..20 map to vials A..T.
+            where labels 1..22 map to vials A..V (21=U, 22=V).
         registered_atlas_image_path: Labelled component atlas warped into scanner
             space (configured atlas segment indices per vial).
     """
