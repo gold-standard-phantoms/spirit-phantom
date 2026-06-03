@@ -22,7 +22,8 @@ Example of the post-registration steps to produce a detailed table of vial stati
         output_path=output_path,
     )
 
-Example of comparing manual and registered-atlas vial segmentations:
+Example of comparing manual and registered-atlas vial segmentations (both in
+scanner space; ``registered_atlas_path`` is typically ``transformed_component_atlas.nii.gz``):
     accuracy_rows = generate_vial_segmentation_accuracy_table(
         manual_segmentation_image_path=manual_segmentation_path,
         registered_atlas_image_path=registered_atlas_path,
