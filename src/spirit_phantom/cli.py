@@ -432,22 +432,30 @@ def analyse_vial_measurements(
 def analyse_dice(
     manual_segmentation_image_path: Annotated[
         Path,
-        typer.Argument(help="Path to the manual labelled segmentation image."),
+        typer.Argument(
+            help=(
+                "Manual vial segmentation (labels 1..20 for vials A..T) in "
+                "scanner (fixed) image space."
+            ),
+        ),
     ],
     registered_atlas_image_path: Annotated[
         Path,
         typer.Argument(
-            help="Path to the registered atlas labelled segmentation image."
+            help=(
+                "Registered component atlas labels in the same scanner space, "
+                "typically registration output transformed_component_atlas.nii.gz."
+            ),
         ),
     ],
 ) -> None:
     """Compute and print a per-vial Dice score table.
 
     Args:
-        manual_segmentation_image_path: Path to the manual labelled
-            segmentation where labels 1..20 map to vials A..T.
-        registered_atlas_image_path: Path to the registered atlas labelled
-            segmentation using configured atlas segment indices.
+        manual_segmentation_image_path: Manual segmentation on the scanner image
+            where labels 1..20 map to vials A..T.
+        registered_atlas_image_path: Labelled component atlas warped into scanner
+            space (configured atlas segment indices per vial).
     """
     from spirit_phantom.core.vials import generate_dice_score_table  # noqa: PLC0415
 
@@ -473,26 +481,34 @@ def analyse_dice(
 def analyse_vials(
     manual_segmentation_image_path: Annotated[
         Path,
-        typer.Argument(help="Path to the manual labelled segmentation image."),
+        typer.Argument(
+            help=(
+                "Manual vial segmentation (labels 1..20 for vials A..T) in "
+                "scanner (fixed) image space."
+            ),
+        ),
     ],
     registered_atlas_image_path: Annotated[
         Path,
         typer.Argument(
-            help="Path to the registered atlas labelled segmentation image."
+            help=(
+                "Registered component atlas labels in the same scanner space, "
+                "typically registration output transformed_component_atlas.nii.gz."
+            ),
         ),
     ],
 ) -> None:
     """Compute and print per-vial segmentation accuracy metrics.
 
-    Compares manual segmentation (ground truth) to the registered atlas per vial.
-    The table includes false positive and false negative rates, overlap counts,
-    confusion counts (TP/FP/FN/TN), sensitivity, and specificity.
+    Same inputs as ``analyse dice``. Compares manual segmentation (ground truth) to
+    the registered component atlas per vial. The table includes FPR, FNR, overlap
+    counts, confusion counts (TP/FP/FN/TN), sensitivity, and specificity.
 
     Args:
-        manual_segmentation_image_path: Path to the manual labelled
-            segmentation where labels 1..20 map to vials A..T.
-        registered_atlas_image_path: Path to the registered atlas labelled
-            segmentation using configured atlas segment indices.
+        manual_segmentation_image_path: Manual segmentation on the scanner image
+            where labels 1..20 map to vials A..T.
+        registered_atlas_image_path: Labelled component atlas warped into scanner
+            space (configured atlas segment indices per vial).
     """
     _run_vial_segmentation_accuracy_analysis(
         manual_segmentation_image_path=manual_segmentation_image_path,
