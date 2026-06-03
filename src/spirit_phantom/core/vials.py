@@ -48,11 +48,10 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-DEFAULT_VIAL_LABELS: tuple[int, ...] = tuple(range(1, 21))
 DEFAULT_EROSION_VOXELS = 0
 EXPECTED_MASK_DIMENSIONS = 3
 VIAL_CONFIG_PATH = Path(__file__).parent / "configuration" / "vial-configurations.json"
-EXPECTED_VIAL_COUNT = len(DEFAULT_VIAL_LABELS)
+FIRST_VIAL_ID = "A"
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -132,6 +131,75 @@ def _validate_vial_configurations(
         seen_segment_indices.add(segment_index)
 
     return configurations
+
+
+def _ordered_vial_configurations() -> list[VialConfiguration]:
+    """Return validated vial configurations sorted by ``vial_id``.
+
+    Returns:
+        Configurations ordered A, B, … through the last configured vial.
+
+    Raises:
+        ValueError: If configuration validation fails or vial IDs are not contiguous.
+    """
+    configurations = _validate_vial_configurations(
+        configurations=_load_vial_configurations()
+    )
+    ordered_configurations = sorted(configurations, key=lambda item: item.vial_id)
+    _validate_contiguous_vial_ids(ordered_configurations=ordered_configurations)
+    return ordered_configurations
+
+
+def _validate_contiguous_vial_ids(
+    *, ordered_configurations: list[VialConfiguration]
+) -> None:
+    """Ensure vial IDs form a contiguous sequence from A upward.
+
+    Args:
+        ordered_configurations: Configurations sorted by ``vial_id``.
+
+    Raises:
+        ValueError: If any expected letter is missing or out of order.
+    """
+    expected_vial_ids = [
+        chr(ord(FIRST_VIAL_ID) + index) for index in range(len(ordered_configurations))
+    ]
+    actual_vial_ids = [
+        configuration.vial_id for configuration in ordered_configurations
+    ]
+    if actual_vial_ids != expected_vial_ids:
+        msg = (
+            "Vial configuration vial_id values must be contiguous from "
+            f"'{FIRST_VIAL_ID}' upward. Expected {expected_vial_ids}, got "
+            f"{actual_vial_ids}."
+        )
+        raise ValueError(msg)
+
+
+def _default_manual_labels(
+    *, ordered_configurations: list[VialConfiguration]
+) -> tuple[int, ...]:
+    """Build manual segmentation label integers 1..N for sorted vials A..N.
+
+    Args:
+        ordered_configurations: Configurations sorted by ``vial_id``.
+
+    Returns:
+        Tuple ``(1, 2, …, len(configurations))`` mapping to vials A..V when 22 rows.
+    """
+    return tuple(range(1, len(ordered_configurations) + 1))
+
+
+def _default_atlas_segment_labels() -> tuple[int, ...]:
+    """Return atlas segment indices for all configured vials in vial_id order.
+
+    Returns:
+        Segment indices from configuration (not manual label integers).
+    """
+    ordered_configurations = _ordered_vial_configurations()
+    return tuple(
+        int(configuration.segment_index) for configuration in ordered_configurations
+    )
 
 
 def _load_nifti_data(*, image_path: Path) -> NDArray[np.generic]:
@@ -232,7 +300,7 @@ def _compute_vial_statistics(
     *,
     registered_atlas_image_path: Path,
     mri_scan_image_path: Path,
-    labels: tuple[int, ...] = DEFAULT_VIAL_LABELS,
+    labels: tuple[int, ...] | None = None,
     erosion_voxels: int = DEFAULT_EROSION_VOXELS,
 ) -> list[VialStatisticRow]:
     """Compute vial statistics from a registered atlas image and MRI scan.
@@ -243,7 +311,7 @@ def _compute_vial_statistics(
     Args:
         registered_atlas_image_path: Path to the registered atlas NIfTI image.
         mri_scan_image_path: Path to the MRI scanner NIfTI image.
-        labels: Label values to analyse. Defaults to labels 1..20.
+        labels: Atlas segment indices to analyse. Defaults to all configured vials.
         erosion_voxels: Number of binary erosion iterations to apply to each ROI. Defaults to 0.
 
     Returns:
@@ -273,8 +341,10 @@ def _compute_vial_statistics(
         msg = "erosion_voxels must be greater than or equal to 0."
         raise ValueError(msg)
 
+    resolved_labels = labels if labels is not None else _default_atlas_segment_labels()
+
     rows: list[VialStatisticRow] = []
-    for label in labels:
+    for label in resolved_labels:
         roi_mask = atlas_data == label
         eroded_mask = _erode_binary_mask(
             binary_mask=roi_mask, iterations=erosion_voxels
@@ -317,12 +387,9 @@ def compute_vial_statistics_details(
             reduce boundary artefacts, but should be chosen by the user.
 
     Returns:
-        Detailed rows ordered by vial ID (A to T).
+        Detailed rows ordered by vial ID (A to V).
     """
-    configurations = _validate_vial_configurations(
-        configurations=_load_vial_configurations()
-    )
-    ordered_configurations = sorted(configurations, key=lambda item: item.vial_id)
+    ordered_configurations = _ordered_vial_configurations()
     labels = tuple(
         sorted(
             int(configuration.segment_index) for configuration in ordered_configurations
@@ -617,19 +684,7 @@ def _load_aligned_segmentation_arrays(
         )
         raise ValueError(msg)
 
-    configurations = _validate_vial_configurations(
-        configurations=_load_vial_configurations()
-    )
-    ordered_configurations = sorted(configurations, key=lambda item: item.vial_id)
-
-    if len(ordered_configurations) < EXPECTED_VIAL_COUNT:
-        msg = (
-            "Vial configuration must include at least "
-            f"{EXPECTED_VIAL_COUNT} rows to map manual labels "
-            f"{DEFAULT_VIAL_LABELS[0]}..{DEFAULT_VIAL_LABELS[-1]} to atlas segment "
-            "indices."
-        )
-        raise ValueError(msg)
+    ordered_configurations = _ordered_vial_configurations()
 
     return manual_data, atlas_data, ordered_configurations
 
@@ -710,10 +765,10 @@ def generate_dice_score_table(
 ) -> list[dict[str, int | str | float]]:
     """Generate per-vial Dice scores using manual-to-atlas vial remapping.
 
-    The manual segmentation labels are expected to use vial order A..T as
-    intensities 1..20. The registered atlas uses segment indices from vial
-    configuration, so each manual label is remapped via ``vial_id`` before Dice
-    calculation.
+    The manual segmentation labels are expected to use vial order A..V as
+    intensities 1..N (for example 21=U, 22=V). The registered atlas uses segment
+    indices from vial configuration, so each manual label is remapped via
+    ``vial_id`` before Dice calculation.
 
     Args:
         manual_segmentation_image_path: Path to manual segmentation NIfTI.
@@ -733,9 +788,12 @@ def generate_dice_score_table(
         registered_atlas_image_path=registered_atlas_image_path,
     )
     total_voxels = int(manual_data.size)
+    manual_labels = _default_manual_labels(
+        ordered_configurations=ordered_configurations
+    )
 
     rows: list[dict[str, int | str | float]] = []
-    for manual_label in DEFAULT_VIAL_LABELS:
+    for manual_label in manual_labels:
         configuration = ordered_configurations[manual_label - 1]
         atlas_label = int(configuration.segment_index)
         metrics = _compute_vial_overlap_metrics(
@@ -767,11 +825,11 @@ def generate_vial_segmentation_accuracy_table(
 ) -> list[dict[str, int | str | float]]:
     """Generate per-vial segmentation accuracy metrics.
 
-    The manual segmentation labels are expected to use vial order A..T as
-    intensities 1..20. The registered atlas uses segment indices from vial
-    configuration, so each manual label is remapped via ``vial_id`` before
-    overlap and classification metrics are calculated. Manual segmentation is
-    treated as ground truth.
+    The manual segmentation labels are expected to use vial order A..V as
+    intensities 1..N (for example 21=U, 22=V). The registered atlas uses segment
+    indices from vial configuration, so each manual label is remapped via
+    ``vial_id`` before overlap and classification metrics are calculated. Manual
+    segmentation is treated as ground truth.
 
     Args:
         manual_segmentation_image_path: Path to manual segmentation NIfTI.
@@ -793,9 +851,12 @@ def generate_vial_segmentation_accuracy_table(
         registered_atlas_image_path=registered_atlas_image_path,
     )
     total_voxels = int(manual_data.size)
+    manual_labels = _default_manual_labels(
+        ordered_configurations=ordered_configurations
+    )
 
     rows: list[dict[str, int | str | float]] = []
-    for manual_label in DEFAULT_VIAL_LABELS:
+    for manual_label in manual_labels:
         configuration = ordered_configurations[manual_label - 1]
         atlas_label = int(configuration.segment_index)
         metrics = _compute_vial_overlap_metrics(

@@ -247,11 +247,16 @@ Q       | 17           | 5           | 0.841078   | 27870         | 21607       
 R       | 18           | 1           | 0.886068   | 24611         | 22110        | 20699
 S       | 19           | 2           | 0.857560   | 28164         | 22510        | 21728
 T       | 20           | 8           | 0.883388   | 25756         | 21752        | 20984
+...
+U       | 21           | 21          | ...        | ...           | ...          | ...
+V       | 22           | 22          | ...        | ...           | ...          | ...
 ```
+
+The full table has 22 rows (vials `A..V`). Thermometry vials `U` and `V` use manual labels and atlas segment indices `21` and `22`.
 
 The `analyse dice` command expects:
 
-- Manual segmentation in scanner (fixed) image space where labels `1..20` represent vials `A..T`.
+- Manual segmentation in scanner (fixed) image space where labels `1..22` represent vials `A..V`.
 - Registered component atlas segmentation in the same scanner space (`transformed_component_atlas.nii.gz` from `register`), on the same voxel grid as the manual mask.
 
 The output table includes:
@@ -292,8 +297,9 @@ vial_id | manual_label | atlas_label | dice_score | fpr      | fnr      | ... | 
 --------+--------------+-------------+------------+----------+----------+-----+-------------+-------------
 A       | 1            | 17          | 0.953306   | 0.000025 | 0.067404 | ... | 0.932596    | 0.999975
 ...
-
 ```
+
+The full table has 22 rows (vials `A..V`).
 
 The `analyse vials` command expects the same inputs as `analyse dice` (see above).
 
@@ -435,6 +441,8 @@ registration boundary effects. The best value depends on your image resolution
 and analysis goal, so choose `erosion_voxels` based on your data.
 
 
+
+Vial measurement tables list all 22 configured vials (`A..V`), including thermometry vials `U` and `V`.
 
 An example of the output is with no erosion:
 
