@@ -1,8 +1,8 @@
 """Module for performing elastix registration of phantom data.
 
 Registration currently consists of an Euler (Rigid) Transform, followed by an Affine
-Transform which is followed by a B-Splines transform. The default elastix transforms
-loaded and are customized to the use case.
+Transform which is followed by a B-Splines transform. Elastix parameter files are
+loaded when each registration stage runs.
 
 """
 
@@ -202,20 +202,19 @@ def _get_parameter_file_path(filename: str) -> Path:
     return source_path
 
 
-# Load rigid parameters from file
-RIGID_PARAM_FILE = _get_parameter_file_path("parameters_Rigid.txt")
-RIGID_PARAM_OBJECT = itk.ParameterObject.New()
-RIGID_PARAM_OBJECT.ReadParameterFile(str(RIGID_PARAM_FILE))
+def _load_parameter_object(*, filename: str) -> itk.ParameterObject:
+    """Load an elastix parameter file into a ParameterObject.
 
-# Load affine parameters from file
-AFFINE_PARAM_FILE = _get_parameter_file_path("parameters_Affine.txt")
-AFFINE_PARAM_OBJECT = itk.ParameterObject.New()
-AFFINE_PARAM_OBJECT.ReadParameterFile(str(AFFINE_PARAM_FILE))
+    Args:
+        filename: Packaged parameter filename under ``core/configuration``.
 
-# Load B-spline parameters from file
-BSPLINE_PARAM_FILE = _get_parameter_file_path("parameters_B_Spline.txt")
-BSPLINE_PARAM_OBJECT = itk.ParameterObject.New()
-BSPLINE_PARAM_OBJECT.ReadParameterFile(str(BSPLINE_PARAM_FILE))
+    Returns:
+        ParameterObject populated from the parameter file.
+    """
+    parameter_file = _get_parameter_file_path(filename)
+    parameter_object = itk.ParameterObject.New()
+    parameter_object.ReadParameterFile(str(parameter_file))
+    return parameter_object
 
 
 def _save_transform_to_file(
@@ -283,10 +282,10 @@ def _perform_rigid_registration(
     """
     logger.info("Perform rigid registration: start")
 
-    rigid_parameter_object = RIGID_PARAM_OBJECT
+    rigid_parameter_object = _load_parameter_object(filename="parameters_Rigid.txt")
     registration_kwargs: dict[str, str] = {}
     if initial_transform_file is not None:
-        rigid_parameter_map = dict(RIGID_PARAM_OBJECT.GetParameterMap(0))
+        rigid_parameter_map = dict(rigid_parameter_object.GetParameterMap(0))
         rigid_parameter_map["AutomaticTransformInitialization"] = ("false",)
         rigid_parameter_object = itk.ParameterObject.New()
         rigid_parameter_object.AddParameterMap(rigid_parameter_map)
@@ -348,12 +347,13 @@ def _perform_affine_registration(
     logger.info("Perform affine registration: start")
     # Save the parameters used by elastix to perform the affine transform
     parameters_path = save_path / AFFINE_PARAMETERS_IN_FILENAME
-    AFFINE_PARAM_OBJECT.WriteParameterFile(str(parameters_path))
+    affine_parameter_object = _load_parameter_object(filename="parameters_Affine.txt")
+    affine_parameter_object.WriteParameterFile(str(parameters_path))
 
     affine_image, affine_transform = itk.elastix_registration_method(
         fixed_image,
         moving_image,
-        parameter_object=AFFINE_PARAM_OBJECT,
+        parameter_object=affine_parameter_object,
         initial_transform_parameter_file_name=str(initial_transform_file),
         log_to_console=False,
     )
@@ -397,12 +397,15 @@ def _perform_bspline_registration(
     logger.info("Perform b-spline registration: start")
     # Save parameters used by elastix to perform the B-Spline transform
     parameters_path = save_path / BSPLINE_PARAMETERS_IN_FILENAME
-    BSPLINE_PARAM_OBJECT.WriteParameterFile(str(parameters_path))
+    bspline_parameter_object = _load_parameter_object(
+        filename="parameters_B_Spline.txt"
+    )
+    bspline_parameter_object.WriteParameterFile(str(parameters_path))
 
     bspline_image, bspline_transform = itk.elastix_registration_method(
         fixed_image,
         moving_image,
-        parameter_object=BSPLINE_PARAM_OBJECT,
+        parameter_object=bspline_parameter_object,
         initial_transform_parameter_file_name=str(initial_transform_file),
         log_to_console=False,
     )

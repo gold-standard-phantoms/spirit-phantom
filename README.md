@@ -135,6 +135,10 @@ Progress controls:
 - `--quiet` / `-q`: suppress progress messages
 - `--verbose` / `-v`: show additional detail, including library INFO logs
 
+Heavy dependencies are loaded only when needed: importing the CLI does not pull
+multi-echo thermometry (matplotlib/nibabel), and ITK/elastix is imported after
+atlas preparation when `register` runs.
+
 ```bash
 uv run spirit-phantom register path/to/scanner_image.nii.gz --quiet
 uv run spirit-phantom register path/to/scanner_image.nii.gz --verbose
