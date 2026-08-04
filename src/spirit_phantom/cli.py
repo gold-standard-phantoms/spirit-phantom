@@ -25,11 +25,6 @@ from spirit_phantom import (
     get_default_component_atlas_image_path,
     get_default_register_moving_image_path,
 )
-from spirit_phantom.core.multi_echo_thermometry import (
-    _EG_MASK_DILATION_ITERATIONS,
-    _EG_MASK_MIN_SAD_COUNTS,
-    coordinate_ethylene_glycol_vial_segmentation,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -37,6 +32,11 @@ if TYPE_CHECKING:
 app = typer.Typer(help="SPIRIT phantom command line tools.")
 analyse_app = typer.Typer(help="Run analyses on registered phantom data.")
 app.add_typer(analyse_app, name="analyse")
+
+# Keep EG-mask CLI defaults local so importing the CLI does not pull
+# multi-echo thermometry (matplotlib/nibabel) until eg-mask runs.
+_EG_MASK_MIN_SAD_COUNTS_DEFAULT = 1000.0
+_EG_MASK_DILATION_ITERATIONS_DEFAULT = 1
 
 
 class AnalysisMethod(StrEnum):
@@ -389,9 +389,6 @@ def register(  # noqa: PLR0913
         msg = "Use either --quiet or --verbose, not both."
         raise typer.BadParameter(msg)
 
-    # Delay heavy registration imports so `--help` stays responsive.
-    from spirit_phantom.core.registration import register_atlas  # noqa: PLC0415
-
     if verbose:
         _configure_verbose_logging()
 
@@ -414,6 +411,11 @@ def register(  # noqa: PLR0913
             "Phantom inverted: applying initial 180-degree Y-rotation.",
             quiet=quiet,
         )
+
+    # Import ITK/elastix only after atlas prep so startup chatter is not blocked.
+    _emit_cli_message("Loading registration engine (ITK)...", quiet=quiet)
+    from spirit_phantom.core.registration import register_atlas  # noqa: PLC0415
+
     registration_result = register_atlas(
         moving_image=resolved_moving_image,
         fixed_image=fixed_image,
@@ -635,14 +637,14 @@ def analyse_eg_mask(
                 "Sum of Absolute Differences threshold in counts for EG mask filtering."
             ),
         ),
-    ] = _EG_MASK_MIN_SAD_COUNTS,
+    ] = _EG_MASK_MIN_SAD_COUNTS_DEFAULT,
     dilation_iterations: Annotated[
         int,
         typer.Option(
             "--dilation-iterations",
             help=("Number of binary dilation iterations for the EG mask."),
         ),
-    ] = _EG_MASK_DILATION_ITERATIONS,
+    ] = _EG_MASK_DILATION_ITERATIONS_DEFAULT,
 ) -> None:
     """Create and save an ethylene glycol vial mask NIfTI file.
 
@@ -654,6 +656,10 @@ def analyse_eg_mask(
         minimum_sad_counts: Sum of Absolute Differences threshold.
         dilation_iterations: Binary dilation iteration count.
     """
+    from spirit_phantom.core.multi_echo_thermometry import (  # noqa: PLC0415
+        coordinate_ethylene_glycol_vial_segmentation,
+    )
+
     if not registered_component_atlas.exists():
         msg = f"Registered component atlas file not found: {registered_component_atlas}"
         raise typer.BadParameter(msg)
