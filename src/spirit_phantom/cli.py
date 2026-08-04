@@ -13,6 +13,7 @@ The ``analyse`` command group includes:
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -20,7 +21,10 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
-from spirit_phantom import get_default_register_moving_image_path
+from spirit_phantom import (
+    get_default_component_atlas_image_path,
+    get_default_register_moving_image_path,
+)
 from spirit_phantom.core.multi_echo_thermometry import (
     _EG_MASK_DILATION_ITERATIONS,
     _EG_MASK_MIN_SAD_COUNTS,
@@ -39,6 +43,46 @@ class AnalysisMethod(StrEnum):
     """Supported analysis methods for CLI workflows."""
 
     VIAL_MEASUREMENTS = "vial-measurements"
+
+
+def _configure_verbose_logging() -> None:
+    """Surface library INFO progress messages for verbose CLI runs.
+
+    Library stages already emit ``logging`` messages. This configures a simple
+    console handler so interactive ``--verbose`` users can see them without
+    affecting library importers.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
+
+
+def _emit_cli_message(message: str, *, quiet: bool) -> None:
+    """Print a CLI message unless quiet mode is enabled.
+
+    Args:
+        message: Text to print.
+        quiet: When True, suppress the message.
+    """
+    if not quiet:
+        print(message)
+
+
+def _resolve_default_atlases(*, quiet: bool) -> Path:
+    """Download or reuse cached default atlases, returning the signal atlas path.
+
+    Prefetches the component atlas as well so registration does not pause for a
+    second silent download after the B-spline stage.
+
+    Args:
+        quiet: When True, suppress status messages around atlas preparation.
+
+    Returns:
+        Local path to the cached signal atlas image.
+    """
+    _emit_cli_message("Preparing default SPIRIT atlases...", quiet=quiet)
+    signal_atlas_path = get_default_register_moving_image_path()
+    get_default_component_atlas_image_path()
+    _emit_cli_message(f"Signal atlas: {signal_atlas_path}", quiet=quiet)
+    return signal_atlas_path
 
 
 def _build_timestamped_output_directory() -> Path:
@@ -255,7 +299,7 @@ def _run_vial_segmentation_accuracy_analysis(
 
 
 @app.command()
-def register(
+def register(  # noqa: PLR0913
     fixed_image: Annotated[
         Path,
         typer.Argument(help="Path to the fixed (scanner) image."),
@@ -309,6 +353,22 @@ def register(
             ),
         ),
     ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option(
+            "--quiet",
+            "-q",
+            help="Suppress progress messages.",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Show extra progress detail, including library INFO logs.",
+        ),
+    ] = False,
 ) -> None:
     """Register an atlas image, with optional follow-up analysis.
 
@@ -322,58 +382,78 @@ def register(
         generate_checkerboards: Whether checkerboard images should be generated.
         phantom_inverted: Whether an initial orientation correction should be
             applied for an inverted phantom scan.
+        quiet: Suppress progress messages.
+        verbose: Show additional progress detail and library INFO logs.
     """
+    if quiet and verbose:
+        msg = "Use either --quiet or --verbose, not both."
+        raise typer.BadParameter(msg)
+
     # Delay heavy registration imports so `--help` stays responsive.
     from spirit_phantom.core.registration import register_atlas  # noqa: PLC0415
 
-    resolved_moving_image = (
-        moving_image
-        if moving_image is not None
-        else get_default_register_moving_image_path()
-    )
+    if verbose:
+        _configure_verbose_logging()
+
+    if moving_image is not None:
+        resolved_moving_image = moving_image
+        _emit_cli_message(
+            f"Using moving image: {resolved_moving_image}",
+            quiet=quiet,
+        )
+    else:
+        resolved_moving_image = _resolve_default_atlases(quiet=quiet)
+
     resolved_output_directory = (
         output_directory
         if output_directory is not None
         else _build_timestamped_output_directory()
     )
-    print(
-        "registration taking place using moving image located at: ",
-        str(resolved_moving_image),
-    )
     if phantom_inverted:
-        print("Phantom inverted: applying initial 180-degree Y-rotation.")
+        _emit_cli_message(
+            "Phantom inverted: applying initial 180-degree Y-rotation.",
+            quiet=quiet,
+        )
     registration_result = register_atlas(
         moving_image=resolved_moving_image,
         fixed_image=fixed_image,
         output_directory=resolved_output_directory,
-        cli_user=True,
+        cli_user=not quiet,
         phantom_inverted=phantom_inverted,
     )
 
-    print("Registration completed.")
-    print(f"Output directory: {resolved_output_directory}")
-    print(f"Registered atlas image: {registration_result.registered_image_path}")
     if registration_result.transformed_component_atlas_path is None:
         msg = "Registration did not produce a transformed component atlas."
         raise RuntimeError(msg)
-    print(
-        "Transformed component atlas: "
-        f"{registration_result.transformed_component_atlas_path}"
+
+    _emit_cli_message(f"Output directory: {resolved_output_directory}", quiet=quiet)
+    _emit_cli_message(
+        f"Registered atlas image: {registration_result.registered_image_path}",
+        quiet=quiet,
     )
-    print(
+    _emit_cli_message(
+        "Transformed component atlas: "
+        f"{registration_result.transformed_component_atlas_path}",
+        quiet=quiet,
+    )
+    _emit_cli_message(
         "Final registration transform: "
-        f"{registration_result.registration_transform_path}"
+        f"{registration_result.registration_transform_path}",
+        quiet=quiet,
     )
 
     if generate_checkerboards:
-        print("Generating checkerboard visualisations based on registered signal atlas")
+        _emit_cli_message(
+            "Generating checkerboard visualisations based on registered signal atlas",
+            quiet=quiet,
+        )
         _generate_checkerboard_images(
             fixed_image_path=fixed_image,
             transformed_component_atlas_image_path=registration_result.transformed_component_atlas_path,
         )
 
     if analyse == AnalysisMethod.VIAL_MEASUREMENTS:
-        print("Running analysis: vial-measurements")
+        _emit_cli_message("Running analysis: vial-measurements", quiet=quiet)
         _run_vial_measurements(
             transformed_component_atlas_image_path=registration_result.transformed_component_atlas_path,
             mri_scan_image_path=fixed_image,
