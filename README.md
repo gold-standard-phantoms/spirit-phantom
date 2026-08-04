@@ -115,7 +115,30 @@ The pinned download URLs and expected SHA-256 values are configured in
 - Signal atlas SHA-256: `5d0614d32ec6c5b638db9b0f5e3a67d2e34765f5974d5a3568d5d9378e93ded0`
 - Component atlas URL: `https://raw.githubusercontent.com/gold-standard-phantoms/public-data/main/phantoms/SPIRIT/atlas/spirit_issue1.0_vx0.25_sub2_components.nii.gz`
 - Component atlas SHA-256: `577e92b10e3855a8f93a89514f3eee79e2bc8917d3c6c861dba06c55433eef16`
-The first run may require network access; subsequent runs use the cached atlases.
+
+The first run may require network access; both the signal and component atlases are
+prefetched before registration so the late component download does not look like a hang.
+Subsequent runs reuse the cache. Registration prints numbered stage progress with
+elapsed times:
+
+```text
+[1/4] Rigid registration...
+[1/4] Rigid registration done (18.2s)
+[2/4] Affine registration...
+...
+[4/4] Transforming component atlas done (12.1s)
+Registration complete (3m 16s)
+```
+
+Progress controls:
+
+- `--quiet` / `-q`: suppress progress messages
+- `--verbose` / `-v`: show additional detail, including library INFO logs
+
+```bash
+uv run spirit-phantom register path/to/scanner_image.nii.gz --quiet
+uv run spirit-phantom register path/to/scanner_image.nii.gz --verbose
+```
 
 To override the default atlas, pass a moving image path as the second argument:
 

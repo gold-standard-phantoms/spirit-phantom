@@ -7,6 +7,7 @@ loaded and are customized to the use case.
 """
 
 import logging
+import time
 from importlib import resources
 from pathlib import Path
 from typing import NamedTuple
@@ -32,6 +33,59 @@ AFFINE_TRANSFORM_FILENAME = "Affine_Transform.txt"
 BSPLINE_TRANSFORM_FILENAME = "BSpline_Transform.txt"
 TRANSFORMED_POINTS_FILENAME = "transformed_points.txt"
 TRANSFORMED_COMPONENT_ATLAS_FILENAME = "transformed_component_atlas.nii.gz"
+_REGISTRATION_STAGE_COUNT = 4
+_SECONDS_PER_MINUTE = 60
+
+
+def _format_duration(*, seconds: float) -> str:
+    """Format a duration for CLI progress messages.
+
+    Args:
+        seconds: Elapsed time in seconds.
+
+    Returns:
+        Human-readable duration such as ``12.3s`` or ``2m 05s``.
+    """
+    if seconds < _SECONDS_PER_MINUTE:
+        return f"{seconds:.1f}s"
+    minutes = int(seconds // _SECONDS_PER_MINUTE)
+    remaining_seconds = round(seconds - (minutes * _SECONDS_PER_MINUTE))
+    if remaining_seconds == _SECONDS_PER_MINUTE:
+        minutes += 1
+        remaining_seconds = 0
+    return f"{minutes}m {remaining_seconds:02d}s"
+
+
+def _print_cli_stage(*, stage: int, label: str, enabled: bool) -> float:
+    """Print a numbered registration stage banner when CLI progress is enabled.
+
+    Args:
+        stage: One-based stage index.
+        label: Short description of the stage.
+        enabled: Whether CLI progress messages should be printed.
+
+    Returns:
+        ``time.perf_counter()`` value at the start of the stage.
+    """
+    if enabled:
+        print(f"[{stage}/{_REGISTRATION_STAGE_COUNT}] {label}...")
+    return time.perf_counter()
+
+
+def _print_cli_stage_done(
+    *, stage: int, label: str, started_at: float, enabled: bool
+) -> None:
+    """Print a numbered stage completion message with elapsed time.
+
+    Args:
+        stage: One-based stage index.
+        label: Short description of the stage.
+        started_at: ``time.perf_counter()`` value from stage start.
+        enabled: Whether CLI progress messages should be printed.
+    """
+    if enabled:
+        elapsed = _format_duration(seconds=time.perf_counter() - started_at)
+        print(f"[{stage}/{_REGISTRATION_STAGE_COUNT}] {label} done ({elapsed})")
 
 
 class RegistrationResult(NamedTuple):
@@ -485,7 +539,8 @@ def register_atlas(
         fixed_image: Path to the fixed (target) reference image file.
         output_directory: Directory for all output files. Intermediate images,
             input parameters, and transform files will all be saved here.
-        cli_user: Whether the function is being called from the CLI. If True, will print logging messages to the console.
+        cli_user: Whether the function is being called from the CLI. If True,
+            numbered stage progress messages with elapsed times are printed.
         phantom_inverted: Whether to apply an initial 180-degree Y rotation
             before rigid registration.
 
@@ -517,6 +572,10 @@ def register_atlas(
         msg = f"Cannot create or write to output directory '{output_directory}': {e}"
         raise OSError(msg) from e
 
+    registration_started_at = time.perf_counter()
+    if cli_user:
+        print("Loading images...")
+
     # Load images from file paths
     moving_image_itk = itk.imread(str(moving_image), itk.F)
     fixed_image_itk = itk.imread(str(fixed_image), itk.F)
@@ -528,37 +587,79 @@ def register_atlas(
             image=fixed_image_itk,
         )
 
-    if cli_user:
-        print("Performing rigid part of registration...")
     # Perform three-stage registration: rigid, affine, B-spline
+    stage_started_at = _print_cli_stage(
+        stage=1,
+        label="Rigid registration",
+        enabled=cli_user,
+    )
     rigid_result = _perform_rigid_registration(
         fixed_image_itk,
         moving_image_itk,
         output_directory,
         initial_transform_file=initial_transform_path,
     )
-    if cli_user:
-        print("Performing affine part of registration...")
+    _print_cli_stage_done(
+        stage=1,
+        label="Rigid registration",
+        started_at=stage_started_at,
+        enabled=cli_user,
+    )
+
+    stage_started_at = _print_cli_stage(
+        stage=2,
+        label="Affine registration",
+        enabled=cli_user,
+    )
     affine_result = _perform_affine_registration(
         fixed_image_itk, moving_image_itk, rigid_result.transform_path, output_directory
     )
-    if cli_user:
-        print("Performing B-spline part of registration...")
+    _print_cli_stage_done(
+        stage=2,
+        label="Affine registration",
+        started_at=stage_started_at,
+        enabled=cli_user,
+    )
+
+    stage_started_at = _print_cli_stage(
+        stage=3,
+        label="B-spline registration",
+        enabled=cli_user,
+    )
     bspline_result = _perform_bspline_registration(
         fixed_image_itk,
         moving_image_itk,
         affine_result.transform_path,
         output_directory,
     )
-    if cli_user:
-        print("Applying final transform to component atlas...")
+    _print_cli_stage_done(
+        stage=3,
+        label="B-spline registration",
+        started_at=stage_started_at,
+        enabled=cli_user,
+    )
+
+    stage_started_at = _print_cli_stage(
+        stage=4,
+        label="Transforming component atlas",
+        enabled=cli_user,
+    )
     transformed_component_atlas_path = _transform_component_atlas(
         transform_path=bspline_result.transform_path,
         output_directory=output_directory,
     )
+    _print_cli_stage_done(
+        stage=4,
+        label="Transforming component atlas",
+        started_at=stage_started_at,
+        enabled=cli_user,
+    )
 
     if cli_user:
-        print("Registration complete!")
+        total_elapsed = _format_duration(
+            seconds=time.perf_counter() - registration_started_at,
+        )
+        print(f"Registration complete ({total_elapsed})")
 
     return RegistrationResult(
         rigid_image_path=rigid_result.image_path,
