@@ -118,7 +118,15 @@ The pinned download URLs and expected SHA-256 values are configured in
 
 The first run may require network access; both the signal and component atlases are
 prefetched before registration so the late component download does not look like a hang.
-Subsequent runs reuse the cache. Registration prints numbered stage progress with
+Subsequent runs reuse the cache.
+
+If registration fails with a memory / RAM error, download a lower-resolution atlas
+(for example `vx0.5` or `vx1.0` instead of the default `vx0.25`) from
+[phantoms/SPIRIT/atlas](https://github.com/gold-standard-phantoms/public-data/tree/main/phantoms/SPIRIT/atlas),
+pass it as the moving image, and use the matching `*_components.nii.gz` for analyses.
+Also try closing other applications, or running on a machine with more RAM.
+
+Registration prints numbered stage progress with
 elapsed times:
 
 ```text

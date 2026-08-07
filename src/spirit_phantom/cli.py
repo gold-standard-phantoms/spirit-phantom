@@ -412,17 +412,26 @@ def register(  # noqa: PLR0913
             quiet=quiet,
         )
 
-    # Import ITK/elastix only after atlas prep so startup chatter is not blocked.
-    _emit_cli_message("Loading registration engine (ITK)...", quiet=quiet)
-    from spirit_phantom.core.registration import register_atlas  # noqa: PLC0415
-
-    registration_result = register_atlas(
-        moving_image=resolved_moving_image,
-        fixed_image=fixed_image,
-        output_directory=resolved_output_directory,
-        cli_user=not quiet,
-        phantom_inverted=phantom_inverted,
+    # Isolate registration after atlas prep so the parent CLI survives OOM kills.
+    _emit_cli_message("Starting isolated registration...", quiet=quiet)
+    from spirit_phantom.core.guarded_registration import (  # noqa: PLC0415
+        run_registration_isolated,
     )
+
+    try:
+        registration_result = run_registration_isolated(
+            moving_image=resolved_moving_image,
+            fixed_image=fixed_image,
+            output_directory=resolved_output_directory,
+            phantom_inverted=phantom_inverted,
+            cli_user=not quiet,
+        )
+    except MemoryError as error:
+        typer.secho(f"Registration failed: {error}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from error
+    except RuntimeError as error:
+        typer.secho(f"Registration failed: {error}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from error
 
     if registration_result.transformed_component_atlas_path is None:
         msg = "Registration did not produce a transformed component atlas."

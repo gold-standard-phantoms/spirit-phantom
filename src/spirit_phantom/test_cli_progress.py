@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from typer.testing import CliRunner
 
 from spirit_phantom import cli
-from spirit_phantom.core import registration
+from spirit_phantom.core import guarded_registration, registration
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -59,7 +59,9 @@ def test_register_quiet_suppresses_progress_messages(
     moving_image.write_bytes(b"moving")
     output_directory = tmp_path / "out"
 
-    def _fake_register_atlas(**_: object) -> registration.RegistrationResult:
+    def _fake_run_registration_isolated(
+        **_: object,
+    ) -> registration.RegistrationResult:
         component_atlas = output_directory / "transformed_component_atlas.nii.gz"
         registered = output_directory / "Bspline_Image.nii.gz"
         transform = output_directory / "BSpline_Transform.txt"
@@ -82,7 +84,12 @@ def test_register_quiet_suppresses_progress_messages(
             transformed_component_atlas_path=component_atlas,
         )
 
-    monkeypatch.setattr(registration, "register_atlas", _fake_register_atlas)
+    # Patch the module attribute so the CLI's delayed import picks up the fake.
+    monkeypatch.setattr(
+        guarded_registration,
+        "run_registration_isolated",
+        _fake_run_registration_isolated,
+    )
 
     runner = CliRunner()
     result = runner.invoke(
