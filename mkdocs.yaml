@@ -1,6 +1,8 @@
 site_name: GSP Spirit phantom tools
-site_description: GSP Spirit phantom tools
-repo_url: https://gitlab.com/goldstandardphantoms/spirit-phantom
+site_description: Tools for analysing Gold Standard Phantoms SPIRIT phantom data
+site_url: https://gold-standard-phantoms.github.io/spirit-phantom/
+repo_url: https://github.com/gold-standard-phantoms/spirit-phantom
+repo_name: gold-standard-phantoms/spirit-phantom
 
 theme:
   name: material
@@ -18,17 +20,28 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
+          paths: [src]
           options:
             docstring_style: google
             docstring_options:
               ignore_init_summary: false
+            filters: ["!^_"]
+            show_if_no_docstring: true
+            show_signature_annotations: true
+            show_source: false
+            show_root_heading: true
+            members_order: source
 
 markdown_extensions:
   - markdown_include.include:
       base_path: .
   - pymdownx.arithmatex:
       generic: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - admonition
@@ -37,9 +50,23 @@ markdown_extensions:
   - md_in_html
 
 nav:
-  - README: index.md
-  - API Reference: module.md
-
+  - Home: index.md
+  - CLI usage: cli.md
+  - Python API usage: python-api.md
+  - Developer tools: developer-tools.md
+  - API reference:
+      - Overview: api/index.md
+      - spirit_phantom: api/spirit_phantom.md
+      - CLI: api/cli.md
+      - Registration: api/registration.md
+      - Guarded registration: api/guarded_registration.md
+      - Vials: api/vials.md
+      - Slice thickness: api/slice_thickness.md
+      - Multi-echo thermometry: api/multi_echo_thermometry.md
+      - Initial transform: api/initial_transform.md
+      - Points: api/points.md
+      - Visualisation: api/visualisation.md
+      - Binary morphology: api/binary_morphology.md
 
 extra_javascript:
   - javascripts/katex.js
