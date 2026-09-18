@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import nibabel
 import numpy as np
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    import nibabel
+    from pathlib import Path
 
 _ATLAS_SPATIAL_NDIM: int = 3
 
@@ -112,3 +112,31 @@ def build_atlas_in_target_space(
         target_image=target_image,
         labels=labels,
     )
+
+
+def save_labelled_mask_image(
+    *,
+    mask: np.ndarray,
+    reference_image: nibabel.nifti1.Nifti1Image,
+    output_image_path: Path,
+    description: str,
+) -> None:
+    """Save a labelled mask NIfTI with copied affine metadata.
+
+    Args:
+        mask: Labelled mask to save.
+        reference_image: Image whose affine and header metadata are reused.
+        output_image_path: Output NIfTI path.
+        description: Short NIfTI header description.
+    """
+    mask_header = reference_image.header.copy()
+    mask_header.set_data_dtype(np.uint8)
+    mask_header["descrip"] = np.array(description, dtype="|S80")
+    mask_image = nibabel.Nifti1Image(
+        dataobj=np.asarray(mask, dtype=np.uint8),
+        affine=reference_image.affine,
+        header=mask_header,
+    )
+    mask_image.set_qform(reference_image.affine, code=1)
+    mask_image.set_sform(reference_image.affine, code=1)
+    nibabel.save(mask_image, str(output_image_path))
