@@ -9,3 +9,4 @@ Treat `develop` as the default base branch for this repository.
 - Open GitHub pull requests against `develop` (ManagePullRequest / GitHub UI `base=develop`).
 - Do not target `main` unless the user explicitly asks for `main` (for example a release).
 - Do not merge to `main` as part of ordinary feature work.
+- Do not deploy GitHub Pages from `develop`; that branch is in-house.
