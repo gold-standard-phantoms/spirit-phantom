@@ -8,12 +8,12 @@ Typical use is a three-stage pipeline: register the SPIRIT atlas to a high-resol
 flowchart LR
   atlas[SPIRIT atlas]
   hires[High-resolution phantom scan]
-  registerCmd["register"]
+  registerCmd("register")
   transformed[Transformed atlas in high-res space]
   clinical[Clinical image of interest]
-  transfer["map-mask"]
+  transfer("map-mask")
   mapped[Atlas in clinical space]
-  analyseCmd[analyse]
+  analyseCmd("analyse")
 
   atlas --> registerCmd
   hires --> registerCmd
