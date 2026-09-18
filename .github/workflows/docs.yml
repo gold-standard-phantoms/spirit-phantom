@@ -3,7 +3,7 @@ name: Deploy docs
 on:
   push:
     branches:
-      - develop
+      - main
   workflow_dispatch:
 
 permissions:
@@ -42,6 +42,7 @@ jobs:
 
   deploy:
     name: Deploy GitHub Pages
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:

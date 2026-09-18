@@ -16,7 +16,7 @@ uv run mkdocs serve
 Then open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). MkDocs is a development
 dependency, so a plain `uv pip install` from git is not enough.
 
-Build a static site (used by GitHub Pages CI):
+Build a static site. GitHub Pages publishes this site on merge to `main` only (`develop` is in-house and is not deployed):
 
 ```bash
 uv run mkdocs build --strict

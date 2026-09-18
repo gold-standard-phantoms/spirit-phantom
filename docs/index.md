@@ -53,4 +53,4 @@ uv run mkdocs serve
 
 Then open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). `uv sync` is required because MkDocs is a development dependency.
 
-**Hosted.** After GitHub Pages is enabled: [https://gold-standard-phantoms.github.io/spirit-phantom/](https://gold-standard-phantoms.github.io/spirit-phantom/)
+**Hosted.** Published from `main` only (not `develop`), after GitHub Pages is enabled: [https://gold-standard-phantoms.github.io/spirit-phantom/](https://gold-standard-phantoms.github.io/spirit-phantom/)
