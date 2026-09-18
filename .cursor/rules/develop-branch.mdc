@@ -1,0 +1,11 @@
+---
+description: Integration branch and pull-request target for this repository
+alwaysApply: true
+---
+
+Treat `develop` as the default base branch for this repository.
+
+- Create feature branches from the latest `origin/develop`. Fetch first if your local copy may be stale.
+- Open GitHub pull requests against `develop` (ManagePullRequest / GitHub UI `base=develop`).
+- Do not target `main` unless the user explicitly asks for `main` (for example a release).
+- Do not merge to `main` as part of ordinary feature work.
