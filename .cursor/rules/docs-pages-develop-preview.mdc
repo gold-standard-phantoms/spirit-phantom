@@ -1,0 +1,8 @@
+---
+description: Temporary in-house GitHub Pages preview from develop
+alwaysApply: true
+---
+
+REMOVE WHEN MERGING TO MAIN: drop this rule file, and drop the `develop` trigger and deploy clause in `.github/workflows/docs.yml`.
+
+GitHub Pages currently deploys from `develop` so in-house work can preview the docs site. That is temporary. Do not treat it as the long-term publish path.
