@@ -1,179 +1,57 @@
-## Spirit Phantom library
+# Spirit Phantom library
 
 Tools for analysing Gold Standard Phantoms (GSP) SPIRIT phantom data.
 
-## Quick Start
+Typical use is a three-stage pipeline: register the SPIRIT atlas to a high-resolution phantom scan, transfer those labels onto a clinical image of interest, then analyse using the atlas in that image's space.
 
-Create a virtual environment and install `spirit-phantom` from GitHub:
+```mermaid
+flowchart LR
+  atlas[SPIRIT atlas]
+  hires[High-resolution phantom scan]
+  registerCmd("register")
+  transformed[Transformed atlas in high-res space]
+  clinical[Clinical image of interest]
+  transfer("map-mask")
+  mapped[Atlas in clinical space]
+  analyseCmd("analyse")
 
-```bash
-uv venv .venv --python=3.12
+  atlas --> registerCmd
+  hires --> registerCmd
+  registerCmd --> transformed
+  transformed --> transfer
+  clinical --> transfer
+  transfer --> mapped
+  mapped --> analyseCmd
 ```
 
-```bash
-uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom'
-```
+Skip the transfer step when the clinical image is the registration target: `register` already puts the atlas on that grid and you can analyse immediately (for example `analyse vial-measurements`). Use `analyse map-mask` when the scan of interest is a different grid, such as a multi-echo series. `analyse eg-mask` remains the thermometry precursor (ethylene glycol mask only; no temperature yet).
 
-View the available registration options:
+## What you can do
 
-```bash
-uv run spirit-phantom register --help
-```
-
-Register a scanner image, run vial measurement analysis, and generate checkerboard
-quality-control images in a single command:
-
-```bash
-uv run spirit-phantom register \
-  path/to/scanner_image.nii.gz \
-  --analyse vial-measurements \
-  --generate-checkerboards
-```
-
+- Register a scanner image and measure vials — CLI (`register`, `analyse vial-measurements`)
+- NEMA slice thickness — Python API only (no CLI yet)
+- Thermometry — in development (ethylene glycol mask helpers exist; no temperature analysis yet)
 
 ## Installation
 
-### Python Version
-
-We recommend using the latest supported version of Python. `spirit-phantom` currently supports Python 3.11–3.13.
-
-### Dependencies
-
-You must ensure that the following software is available on your system:
-
-- **[uv](https://github.com/astral-sh/uv)** (for environment and package management)
-- **[Python](https://www.python.org/)** (installed automatically by uv)
-- **[NumPy](https://numpy.org/)** (installed automatically by uv as a project dependency)
-
-Additional tools are required only for development (testing, linting, and documentation)
-but are also automatically installed by uv:
-
-- **[pytest](https://docs.pytest.org/)** and **[pytest-cov](https://pytest-cov.readthedocs.io/)**
-- **[ruff](https://docs.astral.sh/ruff/)**
-- **[mypy](https://mypy-lang.org/)**
-- **[tox-uv](https://github.com/tox-dev/tox-uv)** (for replicating the checks as done by CI/CD)
-- **[mkdocs](https://www.mkdocs.org/)**, **[mkdocs-material](https://squidfunk.github.io/mkdocs-material/)**, **[mkdocstrings[python]](https://mkdocstrings.github.io/python/)**, **[mkdocs-material](https://squidfunk.github.io/mkdocs-material/)** and **[markdown-include](https://github.com/mondeja/mkdocs-include-markdown-plugin)**
-- **[scipy](https://scipy.org/)** and **[scipy-stubs](https://github.com/scipy/scipy-stubs)**
-
-All of these are installed when you run `uv sync` in a development environment.
-
-### Install from GitHub
-
-Install the latest version directly from GitHub into an existing virtual environment:
+`spirit-phantom` supports Python 3.11–3.13. It is not published to a package index yet; install from GitHub with [uv](https://github.com/astral-sh/uv):
 
 ```bash
+uv venv .venv --python=3.12
 uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom'
 ```
 
-### Install from a Package Index
+## Command line
 
-This project is currently not publishing to a package index.
-
-If you are working directly from a clone of this repository and want to install in editable mode with `pip`:
+List commands and options:
 
 ```bash
-pip install -e .
+uv run spirit-phantom --help
+uv run spirit-phantom register --help
+uv run spirit-phantom analyse --help
 ```
 
-## Usage
-
-### Command Line Interface
-
-The CLI supports both atomic and combined workflows:
-
-- Register once, then run one or more analysis commands.
-- Register and immediately run analysis in one command.
-- Run standalone analysis commands such as per-vial Dice scoring and segmentation accuracy.
-
-#### Registration
-
-Atomic registration (outputs are saved to a timestamped directory by default):
-
-```bash
-uv run spirit-phantom register \
-  path/to/scanner_image.nii.gz \
-  --output-directory path/to/registration_output
-```
-
-Registration outputs are saved to `path/to/registration_output` as:
-
-- `Rigid_Image.nii.gz`
-- `Affine_Image.nii.gz`
-- `Bspline_Image.nii.gz`
-- `transformed_component_atlas.nii.gz`
-
-`Bspline_Image.nii.gz` is the final registered signal atlas image.
-`transformed_component_atlas.nii.gz` is produced by applying the final transform to the
-default component atlas and should be used for vial measurements.
-
-By default, `register` uses the default SPIRIT atlas set and caches files locally using
-`pooch` (cache namespace: `spirit-phantom`).
-The pinned download URLs and expected SHA-256 values are configured in
-`src/spirit_phantom/__init__.py`:
-
-- Signal atlas URL: `https://raw.githubusercontent.com/gold-standard-phantoms/public-data/main/phantoms/SPIRIT/atlas/spirit_issue1.0_vx0.25_sub2.nii.gz`
-- Signal atlas SHA-256: `5d0614d32ec6c5b638db9b0f5e3a67d2e34765f5974d5a3568d5d9378e93ded0`
-- Component atlas URL: `https://raw.githubusercontent.com/gold-standard-phantoms/public-data/main/phantoms/SPIRIT/atlas/spirit_issue1.0_vx0.25_sub2_components.nii.gz`
-- Component atlas SHA-256: `577e92b10e3855a8f93a89514f3eee79e2bc8917d3c6c861dba06c55433eef16`
-
-The first run may require network access; both the signal and component atlases are
-prefetched before registration so the late component download does not look like a hang.
-Subsequent runs reuse the cache.
-
-If registration fails with a memory / RAM error, download a lower-resolution atlas
-(for example `vx0.5` or `vx1.0` instead of the default `vx0.25`) from
-[phantoms/SPIRIT/atlas](https://github.com/gold-standard-phantoms/public-data/tree/main/phantoms/SPIRIT/atlas),
-pass it as the moving image, and use the matching `*_components.nii.gz` for analyses.
-Also try closing other applications, or running on a machine with more RAM.
-
-Registration prints numbered stage progress with
-elapsed times:
-
-```text
-[1/4] Rigid registration...
-[1/4] Rigid registration done (18.2s)
-[2/4] Affine registration...
-...
-[4/4] Transforming component atlas done (12.1s)
-Registration complete (3m 16s)
-```
-
-Progress controls:
-
-- `--quiet` / `-q`: suppress progress messages
-- `--verbose` / `-v`: show additional detail, including library INFO logs
-
-Heavy dependencies are loaded only when needed: importing the CLI does not pull
-multi-echo thermometry (matplotlib/nibabel), and ITK/elastix is imported after
-atlas preparation when `register` runs.
-
-```bash
-uv run spirit-phantom register path/to/scanner_image.nii.gz --quiet
-uv run spirit-phantom register path/to/scanner_image.nii.gz --verbose
-```
-
-To override the default atlas, pass a moving image path as the second argument:
-
-```bash
-uv run spirit-phantom register \
-  path/to/scanner_image.nii.gz \
-  path/to/atlas.nii.gz \
-  --output-directory path/to/registration_output
-```
-
-If the phantom was scanned inverted (upside down), provide an initial orientation
-correction before rigid registration:
-
-```bash
-uv run spirit-phantom register \
-  path/to/scanner_image.nii.gz \
-  --phantom-inverted \
-  --output-directory path/to/registration_output
-```
-
-#### Combined Workflow
-
-Register, analyse, and generate checkerboard quality-control images in one step:
+Register the default SPIRIT atlas to a high-resolution scanner image, then measure vials and write checkerboard quality-control images:
 
 ```bash
 uv run spirit-phantom register \
@@ -182,47 +60,23 @@ uv run spirit-phantom register \
   --generate-checkerboards
 ```
 
-Additional options can be combined freely:
-
-```bash
-uv run spirit-phantom register \
-  path/to/scanner_image.nii.gz \
-  --output-directory path/to/registration_output \
-  --analyse vial-measurements \
-  --erosion-voxels 1 \
-  --generate-checkerboards
-```
-
-In the combined case, detailed vial statistics are saved automatically to:
-
-`path/to/registration_output/vial_statistics_details.txt`
-
-#### Standalone Analyses
-
-Atomic vial measurement analysis (prints detailed table; saves only when output directory is provided):
+Run a standalone analysis on an already registered component atlas:
 
 ```bash
 uv run spirit-phantom analyse vial-measurements \
   path/to/registration_output/transformed_component_atlas.nii.gz \
-  path/to/scanner_image.nii.gz \
-  --erosion-voxels 0 \
-  --output-directory path/to/analysis_output
+  path/to/scanner_image.nii.gz
 ```
 
-Per-vial segmentation comparison (`analyse dice` and `analyse vials` share the same inputs).
-Use a manual mask drawn on the scanner image and the registered component atlas labels
-from registration output (`transformed_component_atlas.nii.gz`, not the signal-only
-`Bspline_Image.nii.gz`).
+Full command reference: [CLI usage](docs/cli.md).
 
-Atomic Dice analysis (prints a per-vial table with label mapping and voxel overlap):
+## Documentation
 
-```bash
-uv run spirit-phantom analyse dice \
-  path/to/manual_segmentation.nii.gz \
-  path/to/registration_output/transformed_component_atlas.nii.gz
-```
+Narrative guides are ordinary Markdown and can be read on GitHub:
 
-Example command (Windows relative paths):
+- [CLI usage](docs/cli.md)
+- [Python API usage](docs/python-api.md)
+- [Developer tools](docs/developer-tools.md)
 
 ```bash
 uv run spirit-phantom analyse dice \
@@ -540,38 +394,20 @@ Steps to set up your environment for development on `spirit-phantom`:
 
 ```bash
 uv sync
-```
-
-To set up with a specific Python version (for example 3.11):
-
-```bash
-uv sync --python=3.11
-```
-
-Commit messages should follow the Conventional Commits specification:
-
-`https://www.conventionalcommits.org`
-
-To run the test suite:
-
-```bash
-uv run pytest
-```
-
-To check code quality:
-
-```bash
-uv run ruff check
-uv run ruff format
-uv run mypy src
-```
-
-### Documentation
-
-Project documentation is built using MkDocs and `mkdocstrings`. To serve the documentation locally in a browser, run:
-
-```bash
 uv run mkdocs serve
 ```
 
-Then open `http://127.0.0.1:8000/` in your browser.
+Then open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). `uv sync` is required because MkDocs is a development dependency; `uv pip install` from git does not include it.
+
+Hosted documentation (after GitHub Pages is enabled): [https://gold-standard-phantoms.github.io/spirit-phantom/](https://gold-standard-phantoms.github.io/spirit-phantom/)
+
+## Development
+
+From a clone:
+
+```bash
+uv sync
+uv run pytest
+```
+
+See [Developer tools](docs/developer-tools.md) for linting, type checking, Dice scoring, and other QC helpers.
