@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+      # REMOVE WHEN MERGING TO MAIN: in-house GitHub Pages preview from develop.
+      - develop
   workflow_dispatch:
 
 permissions:
@@ -42,7 +44,8 @@ jobs:
 
   deploy:
     name: Deploy GitHub Pages
-    if: github.ref == 'refs/heads/main'
+    # REMOVE WHEN MERGING TO MAIN: drop the develop clause; keep main only.
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     needs: build
     runs-on: ubuntu-latest
     environment:
