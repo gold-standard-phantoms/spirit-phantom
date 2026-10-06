@@ -1,6 +1,6 @@
 # CLI usage
 
-The `spirit-phantom` command is a [Typer](https://typer.tiangolo.com/) application. After install, start with `--help`:
+The `spirit-phantom` command is a [Typer](https://typer.tiangolo.com/) application. After [installation](index.md#installation), start with `--help`:
 
 ```bash
 uv run spirit-phantom --help
