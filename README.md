@@ -34,11 +34,24 @@ Skip the transfer step when the clinical image is the registration target: `regi
 
 ## Installation
 
-`spirit-phantom` supports Python 3.11–3.13. It is not published to a package index yet; install from GitHub with [uv](https://github.com/astral-sh/uv):
+`spirit-phantom` supports Python 3.11–3.13. It is not published to a package index yet; install from GitHub with [uv](https://github.com/astral-sh/uv).
+
+Create a virtual environment:
 
 ```bash
 uv venv .venv --python=3.12
+```
+
+Install from `main` (stable / default branch):
+
+```bash
 uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom'
+```
+
+Install from `develop` (integration branch with the latest changes):
+
+```bash
+uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom@develop'
 ```
 
 ## Command line
@@ -85,7 +98,7 @@ uv sync
 uv run mkdocs serve
 ```
 
-Then open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). `uv sync` is required because MkDocs is a development dependency; `uv pip install` from git does not include it.
+Then open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). `uv sync` is required because MkDocs is a development dependency; `uv pip install` from git (see [Installation](#installation)) does not include it.
 
 Hosted documentation (after GitHub Pages is enabled): [https://gold-standard-phantoms.github.io/spirit-phantom/](https://gold-standard-phantoms.github.io/spirit-phantom/)
 
