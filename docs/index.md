@@ -32,6 +32,28 @@ Skip the transfer step when the clinical image is the registration target: `regi
 - NEMA slice thickness — Python API only (no CLI yet)
 - Thermometry — in development (ethylene glycol mask helpers exist; no temperature analysis yet)
 
+## Installation
+
+`spirit-phantom` supports Python 3.11–3.13. It is not published to a package index yet; install from GitHub with [uv](https://github.com/astral-sh/uv).
+
+Create a virtual environment:
+
+```bash
+uv venv .venv --python=3.12
+```
+
+Install from `main` (stable / default branch):
+
+```bash
+uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom'
+```
+
+Install from `develop` (integration branch with the latest changes):
+
+```bash
+uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom@develop'
+```
+
 ## Guides
 
 - [CLI usage](cli.md)

@@ -14,7 +14,8 @@ uv run mkdocs serve
 ```
 
 Then open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). MkDocs is a development
-dependency, so a plain `uv pip install` from git is not enough.
+dependency, so a plain `uv pip install` from git (see [Installation](index.md#installation))
+is not enough.
 
 Build a static site:
 

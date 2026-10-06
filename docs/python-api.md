@@ -1,8 +1,9 @@
 # Python API usage
 
-Import `spirit_phantom` from other Python programs. The snippets below cover the
-main workflows. Function signatures and remaining helpers are in the MkDocs
-[API reference](api/index.md) (those pages need `uv run mkdocs serve` or the hosted site).
+Import `spirit_phantom` from other Python programs after [installation](index.md#installation).
+The snippets below cover the main workflows. Function signatures and remaining helpers
+are in the MkDocs [API reference](api/index.md) (those pages need `uv run mkdocs serve`
+or the hosted site).
 
 All public functions that take paths or configuration use keyword arguments.
 
