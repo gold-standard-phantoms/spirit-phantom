@@ -189,14 +189,22 @@ This is the transfer step in the README workflow figure.
 
 ```bash
 uv run spirit-phantom analyse map-mask \
-  path/to/registered_component_atlas.nii.gz \
+  path/to/registration_output/transformed_component_atlas.nii.gz \
   path/to/clinical_scan.nii.gz \
   --output-mask-image-path path/to/mapped_atlas_mask.nii.gz
 ```
 
-If `--output-mask-image-path` is omitted, the output defaults to:
+If `--output-mask-image-path` is omitted, the mapped mask is written beside the
+registered atlas (the registration output directory) as:
 
-`<parent of clinical_scan>/mapped_atlas_mask_<timestamp>.nii.gz`
+`mapped_atlas_mask__<atlas_stem>__<scan_stem>.nii.gz`
+
+For example, with atlas
+`./registered_data/20261006_194157/transformed_component_atlas.nii.gz` and scan
+`SPIRIT_32ch_sess1_am_cold_12_FLASH_1p0mm_withGrappa_2_NoseInFeetDir_20251103083536_FLASH_1p0mm_withGrappa_2_NoseInFeetDir.nii.gz`,
+the default output is:
+
+`./registered_data/20261006_194157/mapped_atlas_mask__transformed_component_atlas__SPIRIT_32ch_sess1_am_cold_12_FLASH_1p0mm_withGrappa_2_NoseInFeetDir_20251103083536_FLASH_1p0mm_withGrappa_2_NoseInFeetDir.nii.gz`
 
 Skip this command when the clinical image is already the registration target:
 `register` writes `transformed_component_atlas.nii.gz` on that grid. Use
