@@ -117,12 +117,17 @@ from pathlib import Path
 from spirit_phantom.core.atlas_mask import coordinate_mapped_atlas_mask
 
 mask_path = coordinate_mapped_atlas_mask(
-    registered_component_atlas_image_path=Path("transformed_component_atlas.nii.gz"),
+    registered_component_atlas_image_path=Path(
+        "registered_data/20261006_194157/transformed_component_atlas.nii.gz"
+    ),
     scan_image_path=Path("clinical_scan.nii.gz"),
-    output_mask_image_path=Path("mapped_atlas_mask.nii.gz"),
 )
 print(mask_path)
 ```
+
+When `output_mask_image_path` is omitted, the mask is written beside the
+registered atlas as `mapped_atlas_mask__<atlas_stem>__<scan_stem>.nii.gz`.
+Pass `output_mask_image_path=` to override.
 
 For in-memory transfer (no file write), use
 `transfer_atlas_labels_to_image_space` or `build_atlas_in_target_space` in

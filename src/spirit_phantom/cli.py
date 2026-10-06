@@ -629,7 +629,8 @@ def analyse_map_mask(
             "-o",
             help=(
                 "Optional output path for the saved mask NIfTI. Defaults to "
-                "mapped_atlas_mask_<timestamp>.nii.gz in the scan parent directory."
+                "mapped_atlas_mask__<atlas_stem>__<scan_stem>.nii.gz beside the "
+                "registered component atlas (registration output directory)."
             ),
         ),
     ] = None,
@@ -640,6 +641,8 @@ def analyse_map_mask(
         registered_component_atlas: Path to the registered component atlas.
         scan: Path to the scan NIfTI image.
         output_mask_image_path: Optional explicit output path for the saved mask.
+            When omitted, the mask is written next to the registered atlas and
+            named from both input stems.
     """
     if not registered_component_atlas.exists():
         msg = f"Registered component atlas file not found: {registered_component_atlas}"
