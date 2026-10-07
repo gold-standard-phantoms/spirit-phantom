@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from spirit_phantom.core.registration import RegistrationResult
+    from spirit_phantom.core.registration import ParameterSet, RegistrationResult
 
 # Substrings observed in real itk::MemoryAllocationError messages as they
 # cross into Python (via SimpleITK/itk-elastix bindings) as a plain
@@ -85,6 +85,7 @@ def _registration_worker(
     output_directory: Path,
     phantom_inverted: bool,
     cli_user: bool,
+    parameter_set: ParameterSet,
 ) -> None:
     """Entry point run inside the isolated child process. Not called directly."""
     try:
@@ -101,6 +102,7 @@ def _registration_worker(
             output_directory=output_directory,
             cli_user=cli_user,
             phantom_inverted=phantom_inverted,
+            parameter_set=parameter_set,
         )
         conn.send(("ok", result))
     except MemoryError as exc:
@@ -132,6 +134,7 @@ def run_registration_isolated(
     output_directory: Path,
     phantom_inverted: bool = False,
     cli_user: bool = False,
+    parameter_set: ParameterSet | None = None,
 ) -> RegistrationResult:
     """Run `register_atlas` in a child process, with no memory limit applied.
 
@@ -149,6 +152,8 @@ def run_registration_isolated(
         cli_user: Whether to print stage-by-stage progress to stdout (passed
             through to `register_atlas`; the child inherits the parent's
             stdout, so this is still visible in the terminal).
+        parameter_set: Regular or speedy elastix parameter set. Defaults to
+            regular when omitted.
 
     Returns:
         The `RegistrationResult` produced by `register_atlas`.
@@ -165,6 +170,14 @@ def run_registration_isolated(
         RuntimeError: If the child process failed for any other reason,
             including exiting abnormally without returning a result.
     """
+    from spirit_phantom.core.registration import (  # noqa: PLC0415
+        ParameterSet as ParameterSetEnum,
+    )
+
+    resolved_parameter_set = (
+        parameter_set if parameter_set is not None else ParameterSetEnum.REGULAR
+    )
+
     # "spawn" starts a fresh interpreter rather than copy-on-write forking
     # the parent's already-loaded ITK/numpy state, which avoids inheriting
     # unrelated memory pressure and possible fork-safety issues with open
@@ -180,6 +193,7 @@ def run_registration_isolated(
             "output_directory": output_directory,
             "phantom_inverted": phantom_inverted,
             "cli_user": cli_user,
+            "parameter_set": resolved_parameter_set,
         },
     )
     proc.start()
