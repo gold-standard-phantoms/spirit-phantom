@@ -10,6 +10,7 @@ The ``analyse`` command group includes:
 - ``vials`` for per-vial segmentation accuracy metrics (manual vs atlas).
 - ``eg-mask`` for ethylene glycol vial mask generation from multi-echo data.
 - ``map-mask`` for full atlas label mapping onto a scan image.
+- ``slice-thickness`` for NEMA wedge slice-thickness from registered scans.
 """
 
 from __future__ import annotations
@@ -787,6 +788,185 @@ def analyse_eg_mask(
             "Saved EG mask Sum of Absolute Differences diagnostic plot: "
             f"{saved_path.parent / f'{mask_stem}_sad_filter_plot.png'}"
         )
+
+
+@analyse_app.command("slice-thickness")
+def analyse_slice_thickness(  # noqa: C901
+    fixed_image: Annotated[
+        Path,
+        typer.Argument(help="Path to the fixed (scanner) image."),
+    ],
+    moving_image: Annotated[
+        Path | None,
+        typer.Argument(
+            help=(
+                "Path to the moving (atlas) image. If omitted, the default SPIRIT "
+                "atlas is downloaded and cached with pooch."
+            )
+        ),
+    ] = None,
+    *,
+    registration_directory: Annotated[
+        Path | None,
+        typer.Option(
+            "--registration-directory",
+            help=(
+                "Existing registration output directory containing "
+                "BSpline_Transform.txt. When omitted, registration is run first."
+            ),
+        ),
+    ] = None,
+    output_directory: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-directory",
+            "-o",
+            help=(
+                "Directory for registration and/or point-transform outputs. "
+                "Defaults to a timestamped path under registered_data/."
+            ),
+        ),
+    ] = None,
+    parameter_set: Annotated[
+        str,
+        typer.Option(
+            "--parameter-set",
+            help="Elastix parameter set when registering: 'regular' or 'speedy'.",
+        ),
+    ] = "regular",
+    phantom_inverted: Annotated[
+        bool,
+        typer.Option(
+            "--phantom-inverted/--no-phantom-inverted",
+            help="Apply an initial 180-degree Y-rotation before registration.",
+        ),
+    ] = False,
+    ramp_slope_degrees: Annotated[
+        float,
+        typer.Option(
+            "--ramp-slope-degrees",
+            help="Wedge angle alpha in degrees (SPIRIT default 15).",
+        ),
+    ] = 15.0,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress progress messages."),
+    ] = False,
+) -> None:
+    """Measure NEMA wedge slice thickness on a scanner image.
+
+    Registers the atlas (unless ``--registration-directory`` is given), inversely
+    maps atlas wedge-corner points into fixed space, samples edge-response
+    rectangles from the fixed image, and prints per-wedge slice thickness.
+
+    Args:
+        fixed_image: Path to the fixed (scanner) image.
+        moving_image: Path to the moving (atlas) image.
+        registration_directory: Optional existing registration output directory.
+        output_directory: Output directory for new registration / point files.
+        parameter_set: Elastix parameter set name when registering.
+        phantom_inverted: Whether to apply the inverted-phantom initial transform.
+        ramp_slope_degrees: Wedge angle used by the NEMA calculation.
+        quiet: Suppress progress messages.
+    """
+    from spirit_phantom.core.registration import (  # noqa: PLC0415
+        BSPLINE_IMAGE_FILENAME,
+        BSPLINE_TRANSFORM_FILENAME,
+        ParameterSet,
+    )
+    from spirit_phantom.core.slice_thickness_analysis import (  # noqa: PLC0415
+        measure_slice_thickness_from_fixed_wedges,
+    )
+
+    if not fixed_image.exists():
+        msg = f"Fixed image file not found: {fixed_image}"
+        raise typer.BadParameter(msg)
+
+    try:
+        resolved_parameter_set = ParameterSet(parameter_set)
+    except ValueError as error:
+        allowed = ", ".join(item.value for item in ParameterSet)
+        msg = f"Invalid --parameter-set '{parameter_set}'. Expected one of: {allowed}."
+        raise typer.BadParameter(msg) from error
+
+    if moving_image is not None:
+        resolved_moving_image = moving_image
+    else:
+        resolved_moving_image = _resolve_default_atlases(quiet=quiet)
+
+    if registration_directory is not None:
+        resolved_registration_directory = registration_directory
+        if not resolved_registration_directory.is_dir():
+            msg = f"Registration directory not found: {resolved_registration_directory}"
+            raise typer.BadParameter(msg)
+    else:
+        resolved_registration_directory = (
+            output_directory
+            if output_directory is not None
+            else _build_timestamped_output_directory()
+        )
+        _emit_cli_message(
+            f"Registering with parameter set '{resolved_parameter_set.value}'...",
+            quiet=quiet,
+        )
+        from spirit_phantom.core.guarded_registration import (  # noqa: PLC0415
+            run_registration_isolated,
+        )
+
+        try:
+            run_registration_isolated(
+                moving_image=resolved_moving_image,
+                fixed_image=fixed_image,
+                output_directory=resolved_registration_directory,
+                phantom_inverted=phantom_inverted,
+                cli_user=not quiet,
+                parameter_set=resolved_parameter_set,
+            )
+        except (MemoryError, RuntimeError) as error:
+            typer.secho(f"Registration failed: {error}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1) from error
+
+    transform_path = resolved_registration_directory / BSPLINE_TRANSFORM_FILENAME
+    if not transform_path.is_file():
+        msg = f"Transform file not found: {transform_path}"
+        raise typer.BadParameter(msg)
+
+    moving_geometry_path = resolved_registration_directory / BSPLINE_IMAGE_FILENAME
+    if not moving_geometry_path.is_file():
+        moving_geometry_path = resolved_moving_image
+
+    point_output_directory = (
+        output_directory
+        if output_directory is not None
+        else resolved_registration_directory / "slice_thickness"
+    )
+    _emit_cli_message(
+        "Mapping wedge corners into fixed space and measuring thickness...",
+        quiet=quiet,
+    )
+    try:
+        results = measure_slice_thickness_from_fixed_wedges(
+            fixed_image_path=fixed_image,
+            transform_parameter_path=transform_path,
+            moving_image_path=moving_geometry_path,
+            output_directory=point_output_directory,
+            ramp_slope_degrees=ramp_slope_degrees,
+        )
+    except (RuntimeError, ValueError) as error:
+        typer.secho(
+            f"Slice-thickness analysis failed: {error}",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1) from error
+
+    print("wedge_label | thickness_mm | pixel_size_mm | n_lines | n_samples")
+    for result in results:
+        print(
+            f"{result.label} | {result.thickness_mm:.4f} | "
+            f"{result.pixel_size_mm:.4f} | {result.n_lines} | {result.n_samples}"
+        )
+    print(f"Point outputs: {point_output_directory.resolve()}")
 
 
 def main() -> None:
