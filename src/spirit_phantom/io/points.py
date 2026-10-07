@@ -15,6 +15,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
+import itk
+
 # Supported dimensions for point transformations
 DIM_2D = 2
 DIM_3D = 3
@@ -181,6 +183,126 @@ def save_points(
                 raise ValueError(msg)
             coords_str = " ".join(str(coord) for coord in pt)
             f.write(f"{coords_str}\n")
+
+
+def transform_points_with_transformix(
+    *,
+    points: _Points,
+    transform_parameter_path: Path,
+    moving_image_path: Path,
+    output_directory: Path,
+    input_points_filename: str = "inputpoints.txt",
+) -> list[list[float]]:
+    """Transform points with transformix (fixed domain → moving domain).
+
+    Elastix stores ``T`` mapping fixed → moving. Transformix therefore takes
+    input points in the fixed image domain and returns moving-domain points.
+    The moving image is only used to establish dimensionality/geometry.
+
+    Args:
+        points: World-coordinate points in the fixed image domain.
+        transform_parameter_path: Elastix transform parameter file. May chain
+            further transforms via ``InitialTransformParameterFileName``.
+        moving_image_path: Moving image path used by transformix for geometry.
+        output_directory: Directory for transformix ``inputpoints.txt`` and
+            ``outputpoints.txt``.
+        input_points_filename: Filename for the written input point set.
+
+    Returns:
+        Transformed points in the moving image domain.
+    """
+    output_directory.mkdir(parents=True, exist_ok=True)
+    input_points_path = output_directory / input_points_filename
+    save_points(points=points, output_path=input_points_path, point_type="point")
+
+    moving_image = itk.imread(str(moving_image_path), itk.F)
+    transform_parameters = itk.ParameterObject.New()
+    transform_parameters.ReadParameterFile(str(transform_parameter_path))
+    itk.transformix_pointset(
+        moving_image,
+        transform_parameters,
+        fixed_point_set_file_name=str(input_points_path),
+        output_directory=str(output_directory),
+    )
+    return parse_transformix_output(output_path=output_directory / "outputpoints.txt")
+
+
+def invert_points_through_transformix(
+    *,
+    moving_points: _Points,
+    transform_parameter_path: Path,
+    moving_image_path: Path,
+    output_directory: Path,
+    max_iterations: int = 10,
+    tolerance_mm: float = 1e-4,
+) -> list[list[float]]:
+    """Map moving-domain points into fixed space by inverting transformix ``T``.
+
+    Finds fixed points ``x`` such that ``T(x) ≈ p_moving`` using fixed-point
+    iteration ``x ← p - (T(x) - x)``. Useful for atlas landmarks that should
+    land in scan (fixed) space after registration.
+
+    Args:
+        moving_points: World-coordinate points in the moving/atlas domain.
+        transform_parameter_path: Forward elastix transform (fixed → moving).
+        moving_image_path: Moving image path used by transformix for geometry.
+        output_directory: Directory for per-iteration transformix outputs.
+        max_iterations: Maximum fixed-point iterations.
+        tolerance_mm: Stop when max absolute residual in millimetres is below
+            this threshold.
+
+    Returns:
+        Corresponding world-coordinate points in the fixed image domain.
+
+    Raises:
+        ValueError: If ``moving_points`` is empty.
+        RuntimeError: If the iteration fails to converge.
+    """
+    output_directory.mkdir(parents=True, exist_ok=True)
+    targets = [list(map(float, point)) for point in moving_points]
+    if not targets:
+        msg = "Cannot invert an empty point set"
+        raise ValueError(msg)
+
+    estimates = [point.copy() for point in targets]
+    residual = float("inf")
+    for iteration in range(max_iterations):
+        iteration_directory = output_directory / f"iteration_{iteration:02d}"
+        mapped = transform_points_with_transformix(
+            points=estimates,
+            transform_parameter_path=transform_parameter_path,
+            moving_image_path=moving_image_path,
+            output_directory=iteration_directory,
+        )
+        next_estimates: list[list[float]] = []
+        residual = 0.0
+        for target, estimate, mapped_point in zip(
+            targets, estimates, mapped, strict=True
+        ):
+            point_residual = max(
+                abs(mapped_point[dim] - target[dim]) for dim in range(len(target))
+            )
+            residual = max(residual, point_residual)
+            next_estimates.append(
+                [
+                    target[dim] - (mapped_point[dim] - estimate[dim])
+                    for dim in range(len(target))
+                ]
+            )
+        estimates = next_estimates
+        if residual <= tolerance_mm:
+            save_points(
+                points=estimates,
+                output_path=output_directory / "fixed_space_points.txt",
+                point_type="point",
+            )
+            return estimates
+
+    msg = (
+        f"Moving-to-fixed inversion did not converge after {max_iterations} "
+        f"iterations (residual={residual:.6g} mm, tolerance={tolerance_mm} mm)."
+    )
+    raise RuntimeError(msg)
 
 
 def parse_transformix_output(output_path: Path) -> list[list[float]]:
