@@ -301,7 +301,7 @@ def _run_vial_segmentation_accuracy_analysis(
 
 
 @app.command()
-def register(  # noqa: PLR0913
+def register(  # noqa: C901, PLR0913
     fixed_image: Annotated[
         Path,
         typer.Argument(help="Path to the fixed (scanner) image."),
@@ -355,6 +355,16 @@ def register(  # noqa: PLR0913
             ),
         ),
     ] = False,
+    parameter_set: Annotated[
+        str,
+        typer.Option(
+            "--parameter-set",
+            help=(
+                "Elastix parameter set: 'regular' (default) or 'speedy' "
+                "(fewer iterations / samples for faster local runs)."
+            ),
+        ),
+    ] = "regular",
     quiet: Annotated[
         bool,
         typer.Option(
@@ -384,6 +394,7 @@ def register(  # noqa: PLR0913
         generate_checkerboards: Whether checkerboard images should be generated.
         phantom_inverted: Whether an initial orientation correction should be
             applied for an inverted phantom scan.
+        parameter_set: Elastix parameter set name (``regular`` or ``speedy``).
         quiet: Suppress progress messages.
         verbose: Show additional progress detail and library INFO logs.
     """
@@ -393,6 +404,15 @@ def register(  # noqa: PLR0913
 
     if verbose:
         _configure_verbose_logging()
+
+    from spirit_phantom.core.registration import ParameterSet  # noqa: PLC0415
+
+    try:
+        resolved_parameter_set = ParameterSet(parameter_set)
+    except ValueError as error:
+        allowed = ", ".join(item.value for item in ParameterSet)
+        msg = f"Invalid --parameter-set '{parameter_set}'. Expected one of: {allowed}."
+        raise typer.BadParameter(msg) from error
 
     if moving_image is not None:
         resolved_moving_image = moving_image
@@ -413,6 +433,10 @@ def register(  # noqa: PLR0913
             "Phantom inverted: applying initial 180-degree Y-rotation.",
             quiet=quiet,
         )
+    _emit_cli_message(
+        f"Parameter set: {resolved_parameter_set.value}",
+        quiet=quiet,
+    )
 
     # Isolate registration after atlas prep so the parent CLI survives OOM kills.
     _emit_cli_message("Starting isolated registration...", quiet=quiet)
@@ -427,6 +451,7 @@ def register(  # noqa: PLR0913
             output_directory=resolved_output_directory,
             phantom_inverted=phantom_inverted,
             cli_user=not quiet,
+            parameter_set=resolved_parameter_set,
         )
     except MemoryError as error:
         typer.secho(f"Registration failed: {error}", fg=typer.colors.RED, err=True)
