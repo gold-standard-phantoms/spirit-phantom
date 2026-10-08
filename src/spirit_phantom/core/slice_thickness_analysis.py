@@ -15,7 +15,10 @@ import numpy as np
 import numpy.typing as npt
 from scipy.ndimage import map_coordinates
 
-from spirit_phantom.core.generate_slice_mask import wedge_roi_corners
+from spirit_phantom.core.generate_slice_mask import (
+    save_slice_mask,
+    wedge_roi_corners,
+)
 from spirit_phantom.core.slice_thickness import nema_slice_thickness
 from spirit_phantom.io.points import (
     invert_points_through_transformix,
@@ -197,23 +200,41 @@ def measure_slice_thickness_from_fixed_wedges(
     transform_parameter_path: Path,
     moving_image_path: Path,
     output_directory: Path,
+    atlas_image_path: Path | None = None,
     ramp_slope_degrees: float = 15.0,
     n_lines: int = _DEFAULT_PROFILE_LINES,
 ) -> list[WedgeThicknessResult]:
     """Measure slice thickness for both wedges in a registered fixed image.
 
+    Writes QC artefacts under ``output_directory``, including the atlas-space
+    labelled wedge mask (``slice_wedge_mask_atlas.nii.gz``) when an atlas image
+    path is available.
+
     Args:
         fixed_image_path: Scanner (fixed) NIfTI path.
         transform_parameter_path: Final elastix transform parameter file.
         moving_image_path: Moving image path for transformix geometry.
-        output_directory: Directory for intermediate point files.
+        output_directory: Directory for intermediate point files and QC masks.
+        atlas_image_path: Optional atlas/moving NIfTI used to save the
+            world-space wedge ROI mask for visual QC. When omitted,
+            ``moving_image_path`` is used.
         ramp_slope_degrees: Wedge angle alpha in degrees.
         n_lines: Number of profile lines to average per wedge.
 
     Returns:
         Per-wedge thickness results.
     """
+    output_directory.mkdir(parents=True, exist_ok=True)
     fixed_image = nibabel.nifti1.load(filename=str(fixed_image_path))
+    mask_source_path = (
+        atlas_image_path if atlas_image_path is not None else moving_image_path
+    )
+    atlas_image = nibabel.nifti1.load(filename=str(mask_source_path))
+    save_slice_mask(
+        image=atlas_image,
+        output_path=output_directory / "slice_wedge_mask_atlas.nii.gz",
+    )
+
     corners_by_label = map_wedge_corners_to_fixed_space(
         transform_parameter_path=transform_parameter_path,
         moving_image_path=moving_image_path,

@@ -217,6 +217,35 @@ def generate_slice_mask(
     )
 
 
+def save_slice_mask(
+    *,
+    image: nibabel.nifti1.Nifti1Image,
+    output_path: Path,
+) -> Path:
+    """Generate the labelled wedge mask and write it to ``output_path``.
+
+    Args:
+        image: Reference NIfTI whose spatial grid and header define the mask.
+        output_path: Destination NIfTI path (``.nii.gz`` is appended when missing).
+
+    Returns:
+        Absolute path to the saved mask file.
+
+    Raises:
+        RuntimeError: If the file is not present after writing.
+    """
+    mask_image = generate_slice_mask(image=image)
+    resolved = output_path.resolve()
+    if not (resolved.name.endswith(".nii.gz") or resolved.suffix == ".nii"):
+        resolved = resolved.with_name(f"{resolved.name}.nii.gz")
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    nibabel.save(mask_image, str(resolved))
+    if not resolved.is_file():
+        message = f"Failed to write wedge mask to {resolved}"
+        raise RuntimeError(message)
+    return resolved
+
+
 def save_wedge_roi_corner_points(*, output_path: Path) -> Path:
     """Write wedge rectangle corners as a transformix ``point`` file.
 
