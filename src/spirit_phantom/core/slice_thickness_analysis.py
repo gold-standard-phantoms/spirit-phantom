@@ -16,7 +16,10 @@ import numpy.typing as npt
 from scipy.ndimage import map_coordinates
 
 from spirit_phantom.core.generate_slice_mask import (
+    WedgeCorner,
     save_slice_mask,
+    save_wedge_corner_points_mask,
+    save_world_points_mask,
     wedge_roi_corners,
 )
 from spirit_phantom.core.slice_thickness import nema_slice_thickness
@@ -156,12 +159,27 @@ def sample_rectangle_edge_response(
     return np.asarray(profiles, dtype=np.float64), pixel_size_mm
 
 
+@dataclass(frozen=True, slots=True)
+class MappedWedgeCorners:
+    """Atlas wedge corners after inverse mapping into fixed space.
+
+    Attributes:
+        atlas_corners: Corner descriptors in processing order.
+        fixed_points_mm: Parallel fixed-space coordinates (same order).
+        by_label: Fixed-space corners grouped by wedge label.
+    """
+
+    atlas_corners: tuple[WedgeCorner, ...]
+    fixed_points_mm: tuple[tuple[float, float, float], ...]
+    by_label: dict[int, list[list[float]]]
+
+
 def map_wedge_corners_to_fixed_space(
     *,
     transform_parameter_path: Path,
     moving_image_path: Path,
     output_directory: Path,
-) -> dict[int, list[list[float]]]:
+) -> MappedWedgeCorners:
     """Map atlas wedge corners into fixed space by inverting transformix ``T``.
 
     Args:
@@ -171,7 +189,7 @@ def map_wedge_corners_to_fixed_space(
         output_directory: Directory for transformix point I/O.
 
     Returns:
-        Mapping of wedge label to four fixed-space corner coordinates.
+        Mapped corners preserving ``wedge_roi_corners()`` processing order.
     """
     corners = wedge_roi_corners()
     moving_points = [list(corner.point_mm) for corner in corners]
@@ -189,9 +207,20 @@ def map_wedge_corners_to_fixed_space(
     )
 
     by_label: dict[int, list[list[float]]] = {}
+    ordered_fixed: list[tuple[float, float, float]] = []
     for corner, fixed_point in zip(corners, fixed_points, strict=True):
-        by_label.setdefault(corner.label, []).append(fixed_point)
-    return by_label
+        point = (
+            float(fixed_point[0]),
+            float(fixed_point[1]),
+            float(fixed_point[2]),
+        )
+        ordered_fixed.append(point)
+        by_label.setdefault(corner.label, []).append(list(point))
+    return MappedWedgeCorners(
+        atlas_corners=tuple(corners),
+        fixed_points_mm=tuple(ordered_fixed),
+        by_label=by_label,
+    )
 
 
 def measure_slice_thickness_from_fixed_wedges(
@@ -206,9 +235,13 @@ def measure_slice_thickness_from_fixed_wedges(
 ) -> list[WedgeThicknessResult]:
     """Measure slice thickness for both wedges in a registered fixed image.
 
-    Writes QC artefacts under ``output_directory``, including the atlas-space
-    labelled wedge mask (``slice_wedge_mask_atlas.nii.gz``) when an atlas image
-    path is available.
+    Writes QC artefacts under ``output_directory``, including:
+
+    - ``slice_wedge_mask_atlas.nii.gz`` — labelled wedge ROIs in atlas space
+    - ``slice_wedge_corners_atlas.nii.gz`` — corner markers labelled ``1..N`` in
+      ``wedge_roi_corners()`` / transformix processing order
+    - ``slice_wedge_corners_fixed.nii.gz`` — the same markers after inverse
+      mapping into fixed/scan space
 
     Args:
         fixed_image_path: Scanner (fixed) NIfTI path.
@@ -234,24 +267,39 @@ def measure_slice_thickness_from_fixed_wedges(
         image=atlas_image,
         output_path=output_directory / "slice_wedge_mask_atlas.nii.gz",
     )
+    save_wedge_corner_points_mask(
+        image=atlas_image,
+        output_path=output_directory / "slice_wedge_corners_atlas.nii.gz",
+    )
 
-    corners_by_label = map_wedge_corners_to_fixed_space(
+    mapped = map_wedge_corners_to_fixed_space(
         transform_parameter_path=transform_parameter_path,
         moving_image_path=moving_image_path,
         output_directory=output_directory,
     )
+    save_world_points_mask(
+        image=fixed_image,
+        points_mm=mapped.fixed_points_mm,
+        output_path=output_directory / "slice_wedge_corners_fixed.nii.gz",
+    )
 
     paired_path = output_directory / "wedge_corners_fixed_mm.txt"
     with paired_path.open("w", encoding="utf-8") as handle:
-        handle.write("label corner_index x_mm y_mm z_mm\n")
-        for label, corners in sorted(corners_by_label.items()):
-            for index, point in enumerate(corners):
-                handle.write(
-                    f"{label} {index} {point[0]:.6f} {point[1]:.6f} {point[2]:.6f}\n"
-                )
+        handle.write("order label corner_index x_mm y_mm z_mm name\n")
+        corner_index_by_label: dict[int, int] = {}
+        for order_index, (corner, point) in enumerate(
+            zip(mapped.atlas_corners, mapped.fixed_points_mm, strict=True),
+            start=1,
+        ):
+            corner_index = corner_index_by_label.get(corner.label, 0)
+            corner_index_by_label[corner.label] = corner_index + 1
+            handle.write(
+                f"{order_index} {corner.label} {corner_index} "
+                f"{point[0]:.6f} {point[1]:.6f} {point[2]:.6f} {corner.name}\n"
+            )
 
     results: list[WedgeThicknessResult] = []
-    for label, corners in sorted(corners_by_label.items()):
+    for label, corners in sorted(mapped.by_label.items()):
         profiles, pixel_size_mm = sample_rectangle_edge_response(
             image=fixed_image,
             corners_mm=corners,

@@ -794,7 +794,7 @@ def analyse_eg_mask(
 
 
 @analyse_app.command("slice-thickness")
-def analyse_slice_thickness(  # noqa: C901
+def analyse_slice_thickness(  # noqa: C901, PLR0915
     fixed_image: Annotated[
         Path,
         typer.Argument(help="Path to the fixed (scanner) image."),
@@ -976,6 +976,14 @@ def analyse_slice_thickness(  # noqa: C901
     resolved_output = point_output_directory.resolve()
     print(f"Point outputs: {resolved_output}")
     print(f"Atlas wedge ROI mask: {resolved_output / 'slice_wedge_mask_atlas.nii.gz'}")
+    print(
+        "Atlas wedge corners (order 1..N): "
+        f"{resolved_output / 'slice_wedge_corners_atlas.nii.gz'}"
+    )
+    print(
+        "Fixed wedge corners (order 1..N): "
+        f"{resolved_output / 'slice_wedge_corners_fixed.nii.gz'}"
+    )
 
 
 def main() -> None:
