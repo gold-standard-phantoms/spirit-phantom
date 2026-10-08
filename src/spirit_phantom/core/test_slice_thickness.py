@@ -162,6 +162,4 @@ def test_nema_slice_thickness() -> None:
     # Test case 4: FWHM must scale with physical pixel size (not stay in sample indices)
     assert nema_slice_thickness(
         NEMA_MS_5_2018_FIGURE_2_3_SLICE_PROFILE, 0.55, TEST_ANGLE_DEGREES
-    ) == pytest.approx(
-        9 * 0.55 * math.tan(math.radians(TEST_ANGLE_DEGREES)), abs=0.1
-    )
+    ) == pytest.approx(9 * 0.55 * math.tan(math.radians(TEST_ANGLE_DEGREES)), abs=0.1)
