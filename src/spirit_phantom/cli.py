@@ -406,7 +406,10 @@ def register(  # noqa: C901, PLR0913
     if verbose:
         _configure_verbose_logging()
 
-    from spirit_phantom.core.registration import ParameterSet  # noqa: PLC0415
+    # Import constants only (no ITK) so the parent stays small before spawn.
+    from spirit_phantom.core.registration_constants import (  # noqa: PLC0415
+        ParameterSet,
+    )
 
     try:
         resolved_parameter_set = ParameterSet(parameter_set)
@@ -869,13 +872,12 @@ def analyse_slice_thickness(  # noqa: C901
         ramp_slope_degrees: Wedge angle used by the NEMA calculation.
         quiet: Suppress progress messages.
     """
-    from spirit_phantom.core.registration import (  # noqa: PLC0415
+    # Constants only here — do not import registration.py (pulls in ITK) before
+    # the isolated worker spawn, or the parent+child peak can kill the shell.
+    from spirit_phantom.core.registration_constants import (  # noqa: PLC0415
         BSPLINE_IMAGE_FILENAME,
         BSPLINE_TRANSFORM_FILENAME,
         ParameterSet,
-    )
-    from spirit_phantom.core.slice_thickness_analysis import (  # noqa: PLC0415
-        measure_slice_thickness_from_fixed_wedges,
     )
 
     if not fixed_image.exists():
@@ -944,6 +946,10 @@ def analyse_slice_thickness(  # noqa: C901
         "Mapping wedge corners into fixed space and measuring thickness...",
         quiet=quiet,
     )
+    from spirit_phantom.core.slice_thickness_analysis import (  # noqa: PLC0415
+        measure_slice_thickness_from_fixed_wedges,
+    )
+
     try:
         results = measure_slice_thickness_from_fixed_wedges(
             fixed_image_path=fixed_image,

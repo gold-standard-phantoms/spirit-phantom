@@ -24,6 +24,11 @@ Running the registration in a child process means the parent survives
 either way: it either receives a classified result over a pipe, or detects
 that the child was killed and raises a clear exception itself.
 
+Important: this module must not import ITK (or ``registration``, which
+imports ITK) in the parent process before spawning the child. Otherwise the
+parent holds a large ITK footprint while the child allocates registration
+volumes, and the OOM killer can take down the whole terminal session.
+
 If registration fails with a memory-related error, try a lower-resolution
 SPIRIT atlas (for example ``vx0.5`` or ``vx1.0`` instead of the default
 ``vx0.25``) from
@@ -35,13 +40,19 @@ close other applications, or run on a machine with more RAM.
 from __future__ import annotations
 
 import multiprocessing as mp
+import sys
 import traceback
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TextIO, cast
+
+from spirit_phantom.core.registration_constants import (
+    REGISTRATION_LOG_FILENAME,
+    ParameterSet,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from spirit_phantom.core.registration import ParameterSet, RegistrationResult
+    from spirit_phantom.core.registration import RegistrationResult
 
 # Substrings observed in real itk::MemoryAllocationError messages as they
 # cross into Python (via SimpleITK/itk-elastix bindings) as a plain
@@ -56,8 +67,33 @@ _MEMORY_RECOVERY_ADVICE = (
     "(for example vx0.5 or vx1.0 instead of the default vx0.25) from "
     "https://github.com/gold-standard-phantoms/public-data/tree/main/"
     "phantoms/SPIRIT/atlas , closing other applications, or running on a "
-    "machine with more RAM."
+    "machine with more RAM. Progress is also written to "
+    f"{REGISTRATION_LOG_FILENAME} under the output directory."
 )
+
+
+class _TeeTextIO:
+    """Write the same text to the terminal and a log file."""
+
+    def __init__(self, primary: TextIO, secondary: TextIO) -> None:
+        self._primary = primary
+        self._secondary = secondary
+
+    def write(self, data: str) -> int:
+        self._primary.write(data)
+        self._secondary.write(data)
+        self._secondary.flush()
+        return len(data)
+
+    def flush(self) -> None:
+        self._primary.flush()
+        self._secondary.flush()
+
+    def fileno(self) -> int:
+        return self._primary.fileno()
+
+    def isatty(self) -> bool:
+        return self._primary.isatty()
 
 
 def _is_itk_memory_allocation_failure(exc: Exception) -> bool:
@@ -88,14 +124,19 @@ def _registration_worker(
     parameter_set: ParameterSet,
 ) -> None:
     """Entry point run inside the isolated child process. Not called directly."""
+    output_directory.mkdir(parents=True, exist_ok=True)
+    log_path = output_directory / REGISTRATION_LOG_FILENAME
+    log_file = log_path.open("w", encoding="utf-8")
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    sys.stdout = cast("TextIO", _TeeTextIO(original_stdout, log_file))
+    sys.stderr = cast("TextIO", _TeeTextIO(original_stderr, log_file))
     try:
-        # Imported here, inside the child, so `--help` and other CLI paths
-        # that never register anything don't pay the cost of importing ITK.
+        # Imported here, inside the child, so the parent never pays the ITK cost.
         from spirit_phantom.core.registration import register_atlas  # noqa: PLC0415
 
-        # print()/stdout in the child is inherited from the parent process
-        # (multiprocessing does not redirect it by default), so cli_user
-        # progress messages still reach the terminal.
+        sys.stdout.write(f"Registration log: {log_path}\n")
+        sys.stdout.flush()
         result = register_atlas(
             moving_image=moving_image,
             fixed_image=fixed_image,
@@ -124,6 +165,9 @@ def _registration_worker(
                 )
             )
     finally:
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        log_file.close()
         conn.close()
 
 
@@ -134,7 +178,7 @@ def run_registration_isolated(
     output_directory: Path,
     phantom_inverted: bool = False,
     cli_user: bool = False,
-    parameter_set: ParameterSet | None = None,
+    parameter_set: ParameterSet | str | None = None,
 ) -> RegistrationResult:
     """Run `register_atlas` in a child process, with no memory limit applied.
 
@@ -152,8 +196,8 @@ def run_registration_isolated(
         cli_user: Whether to print stage-by-stage progress to stdout (passed
             through to `register_atlas`; the child inherits the parent's
             stdout, so this is still visible in the terminal).
-        parameter_set: Regular or speedy elastix parameter set. Defaults to
-            regular when omitted.
+        parameter_set: Regular or speedy elastix parameter set (enum or name).
+            Defaults to regular when omitted.
 
     Returns:
         The `RegistrationResult` produced by `register_atlas`.
@@ -169,14 +213,14 @@ def run_registration_isolated(
             RAM.
         RuntimeError: If the child process failed for any other reason,
             including exiting abnormally without returning a result.
+        ValueError: If ``parameter_set`` is not a recognised name.
     """
-    from spirit_phantom.core.registration import (  # noqa: PLC0415
-        ParameterSet as ParameterSetEnum,
-    )
-
-    resolved_parameter_set = (
-        parameter_set if parameter_set is not None else ParameterSetEnum.REGULAR
-    )
+    if parameter_set is None:
+        resolved_parameter_set = ParameterSet.REGULAR
+    elif isinstance(parameter_set, ParameterSet):
+        resolved_parameter_set = parameter_set
+    else:
+        resolved_parameter_set = ParameterSet(parameter_set)
 
     # "spawn" starts a fresh interpreter rather than copy-on-write forking
     # the parent's already-loaded ITK/numpy state, which avoids inheriting
@@ -212,18 +256,22 @@ def run_registration_isolated(
         # a signal (typically SIGKILL from the OS OOM killer) rather than
         # exiting through its own try/except. A clean ITK allocation
         # failure would have been caught and sent as a result instead.
+        log_hint = (
+            f" Check {output_directory / REGISTRATION_LOG_FILENAME} for the "
+            "last progress line before the kill."
+        )
         if proc.exitcode == -9:  # noqa: PLR2004 - Unix SIGKILL (-signal)
             msg = (
                 "elastix registration was killed by the operating system "
                 "(SIGKILL), most likely due to insufficient available "
-                f"memory. {_MEMORY_RECOVERY_ADVICE}"
+                f"memory. {_MEMORY_RECOVERY_ADVICE}{log_hint}"
             )
             raise MemoryError(msg)
         msg = (
             f"Registration worker process exited unexpectedly "
             f"(exit code {proc.exitcode}) without returning a result. This "
             "may indicate an out-of-memory condition or a low-level crash "
-            f"in elastix. {_MEMORY_RECOVERY_ADVICE}"
+            f"in elastix. {_MEMORY_RECOVERY_ADVICE}{log_hint}"
         )
         raise RuntimeError(msg)
 
