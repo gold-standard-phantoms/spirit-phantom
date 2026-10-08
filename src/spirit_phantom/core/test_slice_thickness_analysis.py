@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import nibabel
 import numpy as np
@@ -35,7 +35,8 @@ def test_save_slice_mask_writes_labelled_nifti(tmp_path: Path) -> None:
         output_path=tmp_path / "slice_wedge_mask_atlas.nii.gz",
     )
     assert output_path.is_file()
-    saved = np.asarray(nibabel.load(str(output_path)).get_fdata(), dtype=np.uint8)
+    saved_image = cast("nibabel.nifti1.Nifti1Image", nibabel.load(str(output_path)))
+    saved = np.asarray(saved_image.get_fdata(), dtype=np.uint8)
     assert set(np.unique(saved)) == {0, 1, 2}
 
 
