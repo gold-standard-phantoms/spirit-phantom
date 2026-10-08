@@ -8,7 +8,6 @@ loaded when each registration stage runs.
 
 import logging
 import time
-from enum import StrEnum
 from importlib import resources
 from pathlib import Path
 from typing import NamedTuple
@@ -20,29 +19,23 @@ from spirit_phantom.core.initial_transform import (
     INITIAL_FLIP_TRANSFORM_FILENAME,
     write_initial_flip_transform,
 )
+from spirit_phantom.core.registration_constants import (
+    AFFINE_IMAGE_FILENAME,
+    AFFINE_PARAMETERS_IN_FILENAME,
+    AFFINE_TRANSFORM_FILENAME,
+    BSPLINE_IMAGE_FILENAME,
+    BSPLINE_PARAMETERS_IN_FILENAME,
+    BSPLINE_TRANSFORM_FILENAME,
+    RIGID_IMAGE_FILENAME,
+    RIGID_PARAMETERS_IN_FILENAME,
+    RIGID_TRANSFORM_FILENAME,
+    TRANSFORMED_COMPONENT_ATLAS_FILENAME,
+    ParameterSet,
+)
 
 logger = logging.getLogger(__name__)
-# Filename constants for output files
-RIGID_PARAMETERS_IN_FILENAME = "Rigid_Parameters_In.txt"
-AFFINE_PARAMETERS_IN_FILENAME = "Affine_Parameters_In.txt"
-BSPLINE_PARAMETERS_IN_FILENAME = "BSpline_Parameters_In.txt"
-RIGID_IMAGE_FILENAME = "Rigid_Image.nii.gz"
-AFFINE_IMAGE_FILENAME = "Affine_Image.nii.gz"
-BSPLINE_IMAGE_FILENAME = "Bspline_Image.nii.gz"
-RIGID_TRANSFORM_FILENAME = "Rigid_Transform.txt"
-AFFINE_TRANSFORM_FILENAME = "Affine_Transform.txt"
-BSPLINE_TRANSFORM_FILENAME = "BSpline_Transform.txt"
-TRANSFORMED_POINTS_FILENAME = "transformed_points.txt"
-TRANSFORMED_COMPONENT_ATLAS_FILENAME = "transformed_component_atlas.nii.gz"
 _REGISTRATION_STAGE_COUNT = 4
 _SECONDS_PER_MINUTE = 60
-
-
-class ParameterSet(StrEnum):
-    """Elastix parameter-file set used for registration stages."""
-
-    REGULAR = "regular"
-    SPEEDY = "speedy"
 
 
 _PARAMETER_FILENAMES: dict[ParameterSet, dict[str, str]] = {

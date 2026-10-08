@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import ast
 import math
-from typing import TYPE_CHECKING, cast
+from importlib.util import find_spec
+from pathlib import Path
+from typing import cast
 
 import nibabel
 import numpy as np
@@ -15,9 +18,6 @@ from spirit_phantom.core.generate_slice_mask import (
 )
 from spirit_phantom.core.slice_thickness import nema_slice_thickness
 from spirit_phantom.core.slice_thickness_analysis import sample_rectangle_edge_response
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_save_slice_mask_writes_labelled_nifti(tmp_path: Path) -> None:
@@ -38,6 +38,30 @@ def test_save_slice_mask_writes_labelled_nifti(tmp_path: Path) -> None:
     saved_image = cast("nibabel.nifti1.Nifti1Image", nibabel.load(str(output_path)))
     saved = np.asarray(saved_image.get_fdata(), dtype=np.uint8)
     assert set(np.unique(saved)) == {0, 1, 2}
+    # Wedges sit on world Z = 0; with origin z=-2 and 1 mm voxels that is index 2.
+    assert set(np.unique(saved[:, :, 2])) == {0, 1, 2}
+    assert np.all(saved[:, :, 0] == 0)
+    assert np.all(saved[:, :, 1] == 0)
+
+
+def test_isolation_helpers_have_no_module_level_itk_import() -> None:
+    """Parent-side isolation modules must not import ITK at module level."""
+    for module_name in (
+        "spirit_phantom.core.registration_constants",
+        "spirit_phantom.core.guarded_registration",
+    ):
+        spec = find_spec(module_name)
+        assert spec is not None
+        assert spec.origin is not None
+        tree = ast.parse(Path(spec.origin).read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                names = {alias.name for alias in node.names}
+                assert "itk" not in names
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                assert node.module != "itk"
+                assert not node.module.startswith("itk.")
+                assert node.module != "spirit_phantom.core.registration"
 
 
 def test_wedge_roi_corners_has_two_rectangles() -> None:

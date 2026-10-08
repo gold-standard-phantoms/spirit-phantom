@@ -2,6 +2,10 @@
 
 World-space (mm) rectangular ROIs on the Z = 0 mm atlas plane define the two
 SPIRIT slice-thickness wedges. Labels are 1 and 2.
+
+Mask generation walks one voxel-Z plane at a time so peak memory stays on the
+order of a single slice rather than a full-volume world-coordinate grid
+(which for the default 0.25 mm atlas is tens of gigabytes).
 """
 
 from __future__ import annotations
@@ -45,30 +49,6 @@ def _ordered_range(*, bounds: tuple[float, float]) -> tuple[float, float]:
     return (low, high) if low <= high else (high, low)
 
 
-def _world_coordinates(
-    *,
-    shape: tuple[int, int, int],
-    affine: npt.NDArray[np.float64],
-) -> npt.NDArray[np.float64]:
-    """Map voxel centres to world coordinates via the image affine.
-
-    Args:
-        shape: Spatial shape ``(nx, ny, nz)``.
-        affine: 4x4 voxel-to-world affine.
-
-    Returns:
-        Array of shape ``(3, nx, ny, nz)`` with world X, Y, Z in millimetres.
-    """
-    indices = np.indices(dimensions=shape, dtype=np.float64)
-    linear = affine[:3, :3]
-    translation = affine[:3, 3]
-    world = (
-        np.tensordot(linear, indices, axes=([1], [0]))
-        + translation[:, None, None, None]
-    )
-    return cast("npt.NDArray[np.float64]", world)
-
-
 def _half_voxel_extent_along_world_z(*, affine: npt.NDArray[np.float64]) -> float:
     """Estimate half a voxel's extent projected onto world Z.
 
@@ -87,29 +67,68 @@ def _half_voxel_extent_along_world_z(*, affine: npt.NDArray[np.float64]) -> floa
     return float(np.max(half_spacings[contributing]))
 
 
-def _mask_for_wedge_roi(
+def _plane_world_z_range(
+    *,
+    nx: int,
+    ny: int,
+    z_index: int,
+    affine: npt.NDArray[np.float64],
+) -> tuple[float, float]:
+    """Return min/max world Z on the four corners of a fixed voxel-Z plane."""
+    corners = (
+        (0.0, 0.0, float(z_index)),
+        (float(nx - 1), 0.0, float(z_index)),
+        (0.0, float(ny - 1), float(z_index)),
+        (float(nx - 1), float(ny - 1), float(z_index)),
+    )
+    world_z_values = [
+        float(affine[2, 0] * i + affine[2, 1] * j + affine[2, 2] * k + affine[2, 3])
+        for i, j, k in corners
+    ]
+    return min(world_z_values), max(world_z_values)
+
+
+def _world_coordinates_plane(
+    *,
+    nx: int,
+    ny: int,
+    z_index: int,
+    affine: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    """Map one voxel-Z plane to world coordinates.
+
+    Args:
+        nx: Number of voxels along axis 0.
+        ny: Number of voxels along axis 1.
+        z_index: Voxel index along axis 2.
+        affine: 4x4 voxel-to-world affine.
+
+    Returns:
+        Array of shape ``(3, nx, ny)`` with world X, Y, Z in millimetres.
+    """
+    indices = np.indices(dimensions=(nx, ny), dtype=np.float64)
+    linear = affine[:3, :3]
+    translation = affine[:3, 3]
+    # tensordot over in-plane axes; add the fixed-Z column contribution.
+    world = (
+        np.tensordot(linear[:, :2], indices, axes=([1], [0]))
+        + linear[:, 2, None, None] * float(z_index)
+        + translation[:, None, None]
+    )
+    return cast("npt.NDArray[np.float64]", world)
+
+
+def _mask_plane_for_wedge_roi(
     *,
     world_xyz: npt.NDArray[np.float64],
-    affine: npt.NDArray[np.float64],
     x_bounds: tuple[float, float],
     y_bounds: tuple[float, float],
     z_plane_mm: float,
+    z_tolerance: float,
 ) -> npt.NDArray[np.bool_]:
-    """Build a boolean mask for one world-space wedge ROI.
-
-    Args:
-        world_xyz: World coordinates of shape ``(3, nx, ny, nz)``.
-        affine: Image affine used to derive the Z-plane tolerance.
-        x_bounds: Inclusive X range in millimetres.
-        y_bounds: Inclusive Y range in millimetres.
-        z_plane_mm: World Z plane in millimetres.
-
-    Returns:
-        Boolean array that is True inside the ROI.
-    """
+    """Build a boolean mask for one wedge ROI on a single Z plane."""
     x_low, x_high = _ordered_range(bounds=x_bounds)
     y_low, y_high = _ordered_range(bounds=y_bounds)
-    z_tolerance = _half_voxel_extent_along_world_z(affine=affine)
     return cast(
         "npt.NDArray[np.bool_]",
         (world_xyz[0] >= x_low)
@@ -186,6 +205,9 @@ def generate_slice_mask(
 ) -> nibabel.nifti1.Nifti1Image:
     """Generate a labelled wedge ROI mask in the voxel grid of ``image``.
 
+    Processes one voxel-Z plane at a time so peak RAM stays proportional to a
+    single slice (safe for the default ~0.4e9-voxel SPIRIT atlas on 12 GB hosts).
+
     Args:
         image: Reference NIfTI whose spatial grid and header define the mask.
 
@@ -197,18 +219,34 @@ def generate_slice_mask(
     nz = int(image.shape[2])
     spatial_shape = (nx, ny, nz)
     affine = np.asarray(image.affine, dtype=np.float64)
-    world_xyz = _world_coordinates(shape=spatial_shape, affine=affine)
+    z_tolerance = _half_voxel_extent_along_world_z(affine=affine)
 
     labelled_mask = np.zeros(spatial_shape, dtype=np.uint8)
-    for label, (x_bounds, y_bounds, z_plane_mm) in WEDGE_ROIS.items():
-        inside = _mask_for_wedge_roi(
-            world_xyz=world_xyz,
-            affine=affine,
-            x_bounds=x_bounds,
-            y_bounds=y_bounds,
-            z_plane_mm=z_plane_mm,
+    for z_index in range(nz):
+        z_min, z_max = _plane_world_z_range(
+            nx=nx, ny=ny, z_index=z_index, affine=affine
         )
-        labelled_mask[inside] = np.uint8(label)
+        # Skip planes that cannot intersect any wedge Z slab.
+        plane_needed = False
+        for _label, (_x_bounds, _y_bounds, z_plane_mm) in WEDGE_ROIS.items():
+            if z_min - z_tolerance <= z_plane_mm <= z_max + z_tolerance:
+                plane_needed = True
+                break
+        if not plane_needed:
+            continue
+
+        world_xyz = _world_coordinates_plane(
+            nx=nx, ny=ny, z_index=z_index, affine=affine
+        )
+        for label, (x_bounds, y_bounds, z_plane_mm) in WEDGE_ROIS.items():
+            inside = _mask_plane_for_wedge_roi(
+                world_xyz=world_xyz,
+                x_bounds=x_bounds,
+                y_bounds=y_bounds,
+                z_plane_mm=z_plane_mm,
+                z_tolerance=z_tolerance,
+            )
+            labelled_mask[:, :, z_index][inside] = np.uint8(label)
 
     return _nifti_from_mask(
         mask=labelled_mask,
