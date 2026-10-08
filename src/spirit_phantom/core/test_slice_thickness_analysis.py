@@ -14,6 +14,7 @@ import pytest
 
 from spirit_phantom.core.generate_slice_mask import (
     save_slice_mask,
+    save_wedge_corner_points_mask,
     wedge_roi_corners,
 )
 from spirit_phantom.core.slice_thickness import nema_slice_thickness
@@ -42,6 +43,35 @@ def test_save_slice_mask_writes_labelled_nifti(tmp_path: Path) -> None:
     assert set(np.unique(saved[:, :, 2])) == {0, 1, 2}
     assert np.all(saved[:, :, 0] == 0)
     assert np.all(saved[:, :, 1] == 0)
+
+
+def test_save_wedge_corner_points_mask_uses_processing_order(
+    tmp_path: Path,
+) -> None:
+    """Corner NIfTI labels should be 1..N in wedge_roi_corners() order."""
+    shape = (60, 20, 5)
+    data = np.zeros(shape, dtype=np.float32)
+    affine = np.eye(4)
+    affine[0, 3] = -30.0
+    affine[1, 3] = -10.0
+    affine[2, 3] = -2.0
+    image = nibabel.Nifti1Image(dataobj=data, affine=affine)
+
+    output_path = save_wedge_corner_points_mask(
+        image=image,
+        output_path=tmp_path / "slice_wedge_corners_atlas.nii.gz",
+        mark_radius_voxels=0,
+    )
+    saved_image = cast("nibabel.nifti1.Nifti1Image", nibabel.load(str(output_path)))
+    saved = np.asarray(saved_image.get_fdata(), dtype=np.uint8)
+    corners = wedge_roi_corners()
+    assert set(np.unique(saved)) == {0, *range(1, len(corners) + 1)}
+
+    inverse_affine = np.linalg.inv(np.asarray(image.affine, dtype=np.float64))
+    for order_index, corner in enumerate(corners, start=1):
+        voxel = inverse_affine @ np.array([*corner.point_mm, 1.0], dtype=np.float64)
+        i, j, k = np.rint(voxel[:3]).astype(int)
+        assert saved[i, j, k] == order_index
 
 
 def test_isolation_helpers_have_no_module_level_itk_import() -> None:

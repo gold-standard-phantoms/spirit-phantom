@@ -19,6 +19,7 @@ import numpy.typing as npt
 from spirit_phantom.io.points import save_points
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 # World-space (mm) axis-aligned bounds for each wedge on the Z = 0 plane.
@@ -255,6 +256,14 @@ def generate_slice_mask(
     )
 
 
+def _resolve_nifti_output_path(*, output_path: Path) -> Path:
+    """Ensure ``output_path`` has a ``.nii`` / ``.nii.gz`` suffix."""
+    resolved = output_path.resolve()
+    if not (resolved.name.endswith(".nii.gz") or resolved.suffix == ".nii"):
+        resolved = resolved.with_name(f"{resolved.name}.nii.gz")
+    return resolved
+
+
 def save_slice_mask(
     *,
     image: nibabel.nifti1.Nifti1Image,
@@ -273,15 +282,142 @@ def save_slice_mask(
         RuntimeError: If the file is not present after writing.
     """
     mask_image = generate_slice_mask(image=image)
-    resolved = output_path.resolve()
-    if not (resolved.name.endswith(".nii.gz") or resolved.suffix == ".nii"):
-        resolved = resolved.with_name(f"{resolved.name}.nii.gz")
+    resolved = _resolve_nifti_output_path(output_path=output_path)
     resolved.parent.mkdir(parents=True, exist_ok=True)
     nibabel.save(mask_image, str(resolved))
     if not resolved.is_file():
         message = f"Failed to write wedge mask to {resolved}"
         raise RuntimeError(message)
     return resolved
+
+
+def generate_world_points_mask(
+    *,
+    image: nibabel.nifti1.Nifti1Image,
+    points_mm: Sequence[Sequence[float]],
+    mark_radius_voxels: int = 2,
+) -> nibabel.nifti1.Nifti1Image:
+    """Paint world-space points onto ``image``'s grid with 1-based order labels.
+
+    Voxel value ``k`` marks the ``k``-th point in ``points_mm`` (processing order).
+    Each point is drawn as an axis-aligned cross of radius ``mark_radius_voxels``
+    so the markers remain visible when overlaid on high-resolution atlases.
+
+    Args:
+        image: Reference NIfTI whose spatial grid and header define the mask.
+        points_mm: World-coordinate points in millimetres, in the desired order.
+        mark_radius_voxels: Half-extent of the cross painted around each point.
+
+    Returns:
+        NIfTI mask matching ``image`` geometry; background is 0.
+
+    Raises:
+        ValueError: If ``mark_radius_voxels`` is negative or a point is not 3-D.
+    """
+    if mark_radius_voxels < 0:
+        msg = "mark_radius_voxels must be non-negative"
+        raise ValueError(msg)
+
+    nx = int(image.shape[0])
+    ny = int(image.shape[1])
+    nz = int(image.shape[2])
+    labelled = np.zeros((nx, ny, nz), dtype=np.uint8)
+    affine = np.asarray(image.affine, dtype=np.float64)
+    inverse_affine = np.linalg.inv(affine)
+
+    for order_index, point in enumerate(points_mm, start=1):
+        point_array = np.asarray(point, dtype=np.float64)
+        if point_array.shape != (3,):
+            msg = f"Expected a 3-D point, got shape {point_array.shape}"
+            raise ValueError(msg)
+        voxel = inverse_affine @ np.array(
+            [point_array[0], point_array[1], point_array[2], 1.0],
+            dtype=np.float64,
+        )
+        centre = np.rint(voxel[:3]).astype(np.int64)
+        i0, j0, k0 = (int(centre[0]), int(centre[1]), int(centre[2]))
+        label = np.uint8(order_index)
+        for delta in range(-mark_radius_voxels, mark_radius_voxels + 1):
+            i = i0 + delta
+            if 0 <= i < nx and 0 <= j0 < ny and 0 <= k0 < nz:
+                labelled[i, j0, k0] = label
+            j = j0 + delta
+            if 0 <= i0 < nx and 0 <= j < ny and 0 <= k0 < nz:
+                labelled[i0, j, k0] = label
+            k = k0 + delta
+            if 0 <= i0 < nx and 0 <= j0 < ny and 0 <= k < nz:
+                labelled[i0, j0, k] = label
+
+    return _nifti_from_mask(
+        mask=labelled,
+        reference_image=image,
+        description="Wedge corner points (1-based processing order)",
+    )
+
+
+def save_world_points_mask(
+    *,
+    image: nibabel.nifti1.Nifti1Image,
+    points_mm: Sequence[Sequence[float]],
+    output_path: Path,
+    mark_radius_voxels: int = 2,
+) -> Path:
+    """Write a NIfTI mask of world points labelled by processing order.
+
+    Args:
+        image: Reference NIfTI whose spatial grid and header define the mask.
+        points_mm: World-coordinate points in millimetres, in the desired order.
+        output_path: Destination NIfTI path (``.nii.gz`` is appended when missing).
+        mark_radius_voxels: Half-extent of the cross painted around each point.
+
+    Returns:
+        Absolute path to the saved mask file.
+
+    Raises:
+        RuntimeError: If the file is not present after writing.
+    """
+    mask_image = generate_world_points_mask(
+        image=image,
+        points_mm=points_mm,
+        mark_radius_voxels=mark_radius_voxels,
+    )
+    resolved = _resolve_nifti_output_path(output_path=output_path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    nibabel.save(mask_image, str(resolved))
+    if not resolved.is_file():
+        message = f"Failed to write corner-points mask to {resolved}"
+        raise RuntimeError(message)
+    return resolved
+
+
+def save_wedge_corner_points_mask(
+    *,
+    image: nibabel.nifti1.Nifti1Image,
+    output_path: Path,
+    mark_radius_voxels: int = 2,
+) -> Path:
+    """Save atlas wedge corners as a labelled NIfTI in ``wedge_roi_corners`` order.
+
+    Labels are ``1..N`` matching the flat processing order used for transformix
+    inversion and profile sampling (wedge 1 corners, then wedge 2 corners;
+    within each wedge: ``x_min_y_min``, ``x_max_y_min``, ``x_max_y_max``,
+    ``x_min_y_max``).
+
+    Args:
+        image: Reference NIfTI (typically the atlas) defining the voxel grid.
+        output_path: Destination NIfTI path.
+        mark_radius_voxels: Half-extent of the cross painted around each corner.
+
+    Returns:
+        Absolute path to the saved mask file.
+    """
+    corners = wedge_roi_corners()
+    return save_world_points_mask(
+        image=image,
+        points_mm=[corner.point_mm for corner in corners],
+        output_path=output_path,
+        mark_radius_voxels=mark_radius_voxels,
+    )
 
 
 def save_wedge_roi_corner_points(*, output_path: Path) -> Path:
