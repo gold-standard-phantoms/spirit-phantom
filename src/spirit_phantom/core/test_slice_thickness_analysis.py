@@ -3,14 +3,40 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import nibabel
 import numpy as np
 import pytest
 
-from spirit_phantom.core.generate_slice_mask import wedge_roi_corners
+from spirit_phantom.core.generate_slice_mask import (
+    save_slice_mask,
+    wedge_roi_corners,
+)
 from spirit_phantom.core.slice_thickness import nema_slice_thickness
 from spirit_phantom.core.slice_thickness_analysis import sample_rectangle_edge_response
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+def test_save_slice_mask_writes_labelled_nifti(tmp_path: Path) -> None:
+    """World-space wedge mask should be saved with labels 1 and 2."""
+    shape = (60, 20, 5)
+    data = np.zeros(shape, dtype=np.float32)
+    affine = np.eye(4)
+    affine[0, 3] = -30.0
+    affine[1, 3] = -10.0
+    affine[2, 3] = -2.0
+    image = nibabel.Nifti1Image(dataobj=data, affine=affine)
+
+    output_path = save_slice_mask(
+        image=image,
+        output_path=tmp_path / "slice_wedge_mask_atlas.nii.gz",
+    )
+    assert output_path.is_file()
+    saved = np.asarray(nibabel.load(str(output_path)).get_fdata(), dtype=np.uint8)
+    assert set(np.unique(saved)) == {0, 1, 2}
 
 
 def test_wedge_roi_corners_has_two_rectangles() -> None:

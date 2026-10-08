@@ -950,6 +950,7 @@ def analyse_slice_thickness(  # noqa: C901
             transform_parameter_path=transform_path,
             moving_image_path=moving_geometry_path,
             output_directory=point_output_directory,
+            atlas_image_path=resolved_moving_image,
             ramp_slope_degrees=ramp_slope_degrees,
         )
     except (RuntimeError, ValueError) as error:
@@ -966,7 +967,9 @@ def analyse_slice_thickness(  # noqa: C901
             f"{result.label} | {result.thickness_mm:.4f} | "
             f"{result.pixel_size_mm:.4f} | {result.n_lines} | {result.n_samples}"
         )
-    print(f"Point outputs: {point_output_directory.resolve()}")
+    resolved_output = point_output_directory.resolve()
+    print(f"Point outputs: {resolved_output}")
+    print(f"Atlas wedge ROI mask: {resolved_output / 'slice_wedge_mask_atlas.nii.gz'}")
 
 
 def main() -> None:
