@@ -72,7 +72,7 @@ def test_save_world_points_mask_uses_processing_order(tmp_path: Path) -> None:
     assert set(np.unique(saved)) == {0, *range(1, len(points_mm) + 1)}
 
     for order_index, point in enumerate(points_mm, start=1):
-        i, j, k = (int(round(point[0])), int(round(point[1])), int(round(point[2])))
+        i, j, k = (round(point[0]), round(point[1]), round(point[2]))
         assert saved[i, j, k] == order_index
 
 
