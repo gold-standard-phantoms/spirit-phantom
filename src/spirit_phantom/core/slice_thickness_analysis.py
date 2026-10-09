@@ -49,6 +49,53 @@ _DIAGNOSTIC_PLOT_DPI = 150
 _REVERSE_ERF_SAMPLE_DIRECTION_LABELS = frozenset({1})
 
 
+def discard_wedge_edge_lines(
+    *,
+    profiles: npt.NDArray[np.float64],
+    discard_edge_lines: int,
+) -> npt.NDArray[np.float64]:
+    """Drop short-axis edge lines that often suffer partial-volume contamination.
+
+    Profile columns are ordered from short-edge fraction ``0`` to ``1``. Dropping
+    ``discard_edge_lines`` from each end keeps the interior lines for NEMA
+    averaging.
+
+    Args:
+        profiles: Edge-response array of shape ``(n_samples, n_lines)``.
+        discard_edge_lines: Number of lines to remove from each short-axis end.
+            ``0`` leaves ``profiles`` unchanged.
+
+    Returns:
+        Trimmed profiles with shape ``(n_samples, n_lines - 2 * discard_edge_lines)``.
+
+    Raises:
+        ValueError: If ``discard_edge_lines`` is negative or would leave fewer
+            than one line.
+    """
+    if discard_edge_lines < 0:
+        msg = "discard_edge_lines must be >= 0"
+        raise ValueError(msg)
+    if discard_edge_lines == 0:
+        return np.asarray(profiles, dtype=np.float64)
+
+    array = np.asarray(profiles, dtype=np.float64)
+    if array.ndim == 1:
+        msg = "Cannot discard edge lines from a single profile line"
+        raise ValueError(msg)
+    n_lines = int(array.shape[1])
+    kept = n_lines - 2 * discard_edge_lines
+    if kept < 1:
+        msg = (
+            f"discard_edge_lines={discard_edge_lines} removes all lines "
+            f"(n_lines={n_lines}); need n_lines > 2 * discard_edge_lines"
+        )
+        raise ValueError(msg)
+    return np.asarray(
+        array[:, discard_edge_lines : n_lines - discard_edge_lines],
+        dtype=np.float64,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class WedgeThicknessResult:
     """Slice-thickness result for one wedge.
@@ -544,6 +591,7 @@ def measure_slice_thickness_from_fixed_wedges(
     atlas_image_path: Path | None = None,
     ramp_slope_degrees: float = 15.0,
     n_lines: int = _DEFAULT_PROFILE_LINES,
+    discard_edge_lines: int = 1,
 ) -> list[WedgeThicknessResult]:
     """Measure slice thickness for both wedges in a registered fixed image.
 
@@ -568,7 +616,11 @@ def measure_slice_thickness_from_fixed_wedges(
             world-space wedge ROI mask for visual QC. When omitted,
             ``moving_image_path`` is used.
         ramp_slope_degrees: Wedge angle alpha in degrees.
-        n_lines: Number of profile lines to average per wedge.
+        n_lines: Number of profile lines sampled across the short edge before
+            optional edge discarding.
+        discard_edge_lines: Number of short-axis edge lines to drop from each
+            end before NEMA averaging (reduces partial-volume contamination).
+            ``0`` keeps every sampled line.
 
     Returns:
         Per-wedge thickness results.
@@ -622,6 +674,10 @@ def measure_slice_thickness_from_fixed_wedges(
             corners_mm=corners,
             n_lines=n_lines,
         )
+        profiles = discard_wedge_edge_lines(
+            profiles=profiles,
+            discard_edge_lines=discard_edge_lines,
+        )
         if label in _REVERSE_ERF_SAMPLE_DIRECTION_LABELS:
             # Sample from the opposite end of the long axis so dI/dx is a peak.
             profiles = np.asarray(profiles[::-1, :], dtype=np.float64)
@@ -657,7 +713,9 @@ def measure_slice_thickness_from_fixed_wedges(
                 ),
                 "half_max": diagnostics.half_max,
                 "pixel_size_mm": float(pixel_size_mm),
-                "n_lines": int(profiles.shape[1]),
+                "n_lines_sampled": int(n_lines),
+                "n_lines_used": int(profiles.shape[1]),
+                "discard_edge_lines": int(discard_edge_lines),
                 "n_samples": int(profiles.shape[0]),
                 "ramp_slope_degrees": float(ramp_slope_degrees),
             }
@@ -686,7 +744,9 @@ def measure_slice_thickness_from_fixed_wedges(
             "right_cross_mm",
             "half_max",
             "pixel_size_mm",
-            "n_lines",
+            "n_lines_sampled",
+            "n_lines_used",
+            "discard_edge_lines",
             "n_samples",
             "ramp_slope_degrees",
         ]

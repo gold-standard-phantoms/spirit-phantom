@@ -794,7 +794,7 @@ def analyse_eg_mask(
 
 
 @analyse_app.command("slice-thickness")
-def analyse_slice_thickness(  # noqa: C901, PLR0912, PLR0915
+def analyse_slice_thickness(  # noqa: C901, PLR0912, PLR0913, PLR0915
     fixed_image: Annotated[
         Path,
         typer.Argument(help="Path to the fixed (scanner) image."),
@@ -851,6 +851,17 @@ def analyse_slice_thickness(  # noqa: C901, PLR0912, PLR0915
             help="Wedge angle alpha in degrees (SPIRIT default 15).",
         ),
     ] = 15.0,
+    discard_edge_lines: Annotated[
+        int,
+        typer.Option(
+            "--discard-edge-lines",
+            help=(
+                "Drop this many short-axis profile lines from each wedge edge "
+                "before averaging (reduces partial-volume contamination). "
+                "Default 1; use 0 to keep every sampled line."
+            ),
+        ),
+    ] = 1,
     quiet: Annotated[
         bool,
         typer.Option("--quiet", "-q", help="Suppress progress messages."),
@@ -870,6 +881,7 @@ def analyse_slice_thickness(  # noqa: C901, PLR0912, PLR0915
         parameter_set: Elastix parameter set name when registering.
         phantom_inverted: Whether to apply the inverted-phantom initial transform.
         ramp_slope_degrees: Wedge angle used by the NEMA calculation.
+        discard_edge_lines: Short-axis edge lines discarded from each end.
         quiet: Suppress progress messages.
     """
     # Constants only here — do not import registration.py (pulls in ITK) before
@@ -950,6 +962,10 @@ def analyse_slice_thickness(  # noqa: C901, PLR0912, PLR0915
         measure_slice_thickness_from_fixed_wedges,
     )
 
+    if discard_edge_lines < 0:
+        msg = "--discard-edge-lines must be >= 0"
+        raise typer.BadParameter(msg)
+
     try:
         results = measure_slice_thickness_from_fixed_wedges(
             fixed_image_path=fixed_image,
@@ -958,6 +974,7 @@ def analyse_slice_thickness(  # noqa: C901, PLR0912, PLR0915
             output_directory=point_output_directory,
             atlas_image_path=resolved_moving_image,
             ramp_slope_degrees=ramp_slope_degrees,
+            discard_edge_lines=discard_edge_lines,
         )
     except (RuntimeError, ValueError) as error:
         typer.secho(
