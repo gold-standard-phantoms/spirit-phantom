@@ -23,9 +23,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 # World-space (mm) axis-aligned bounds for each wedge on the Z = 0 plane.
+# Y extents (high→low listing): 5.766, 0.01592, -0.2341, -5.984.
 WEDGE_ROIS: dict[int, tuple[tuple[float, float], tuple[float, float], float]] = {
-    1: ((-25.0, 25.0), (0.0, 5.0), 0.0),
-    2: ((-25.0, 25.0), (-6.0, -1.0), 0.0),
+    1: ((-25.0, 25.0), (0.01592, 5.766), 0.0),
+    2: ((-25.0, 25.0), (-5.984, -0.2341), 0.0),
 }
 
 
