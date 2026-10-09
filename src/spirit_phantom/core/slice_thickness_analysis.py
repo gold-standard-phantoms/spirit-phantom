@@ -42,6 +42,11 @@ _DEFAULT_PROFILE_LINES = 5
 _MIN_SAMPLES_PER_LINE = 32
 _SPATIAL_NDIM = 3
 _DIAGNOSTIC_PLOT_DPI = 150
+# Wedge 1's intensity ramp rises opposite to the default long-axis sample
+# direction, so the differentiated slice profile is a trough. Reverse the ERF
+# along the sample axis for these labels so FWHM sees a peak. Wedge 2 is left
+# unchanged.
+_REVERSE_ERF_SAMPLE_DIRECTION_LABELS = frozenset({1})
 
 
 @dataclass(frozen=True, slots=True)
@@ -617,6 +622,9 @@ def measure_slice_thickness_from_fixed_wedges(
             corners_mm=corners,
             n_lines=n_lines,
         )
+        if label in _REVERSE_ERF_SAMPLE_DIRECTION_LABELS:
+            # Sample from the opposite end of the long axis so dI/dx is a peak.
+            profiles = np.asarray(profiles[::-1, :], dtype=np.float64)
         thickness_mm = nema_slice_thickness(
             profiles,
             pixel_size_mm,
