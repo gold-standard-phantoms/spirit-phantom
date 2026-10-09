@@ -794,7 +794,7 @@ def analyse_eg_mask(
 
 
 @analyse_app.command("slice-thickness")
-def analyse_slice_thickness(  # noqa: C901, PLR0915
+def analyse_slice_thickness(  # noqa: C901, PLR0912, PLR0915
     fixed_image: Annotated[
         Path,
         typer.Argument(help="Path to the fixed (scanner) image."),
@@ -984,6 +984,16 @@ def analyse_slice_thickness(  # noqa: C901, PLR0915
         "Fixed wedge corners (order 1..N): "
         f"{resolved_output / 'slice_wedge_corners_fixed.nii.gz'}"
     )
+    print(f"Thickness summary CSV: {resolved_output / 'slice_thickness_summary.csv'}")
+    for result in results:
+        print(
+            f"Wedge {result.label} profile CSV: "
+            f"{resolved_output / f'wedge_{result.label}_profiles.csv'}"
+        )
+        print(
+            f"Wedge {result.label} profile plot: "
+            f"{resolved_output / f'wedge_{result.label}_profiles.png'}"
+        )
 
 
 def main() -> None:
