@@ -20,6 +20,7 @@ from spirit_phantom.core.generate_slice_mask import (
 from spirit_phantom.core.slice_thickness import nema_slice_thickness
 from spirit_phantom.core.slice_thickness_analysis import (
     build_wedge_profile_diagnostics,
+    discard_wedge_edge_lines,
     sample_rectangle_edge_response,
     save_wedge_profile_diagnostics,
 )
@@ -107,6 +108,20 @@ def test_wedge_roi_corners_has_two_rectangles() -> None:
     wedge_2 = [corner for corner in corners if corner.label == 2]
     assert wedge_2[0].point_mm == (-25.0, -5.984, 0.0)
     assert wedge_2[3].point_mm == (-25.0, -0.2341, 0.0)
+
+
+def test_discard_wedge_edge_lines_keeps_interior_columns() -> None:
+    """Edge discard should drop the first/last short-axis profile lines."""
+    profiles = np.arange(20, dtype=np.float64).reshape(4, 5)
+    trimmed = discard_wedge_edge_lines(profiles=profiles, discard_edge_lines=1)
+    assert trimmed.shape == (4, 3)
+    np.testing.assert_array_equal(trimmed, profiles[:, 1:4])
+
+    unchanged = discard_wedge_edge_lines(profiles=profiles, discard_edge_lines=0)
+    np.testing.assert_array_equal(unchanged, profiles)
+
+    with pytest.raises(ValueError, match="removes all lines"):
+        discard_wedge_edge_lines(profiles=profiles, discard_edge_lines=3)
 
 
 def test_save_wedge_profile_diagnostics_writes_csv_and_png(tmp_path: Path) -> None:
