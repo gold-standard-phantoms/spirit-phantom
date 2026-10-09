@@ -24,6 +24,7 @@ dependencies = [
   "pooch>=1.8.2",
   "typer>=0.24.1",
   "nibabel>=5.4.2",
+  "scipy>=1.16.3",
 ]
 
 
@@ -39,7 +40,6 @@ dev = [
   "ruff>=0.14.3",
   "mypy>=1.18.2",
   "scipy-stubs>=1.16.3.2",
-  "scipy>=1.16.3",
 ]
 
 [project.scripts]
@@ -50,6 +50,9 @@ package-data = { "spirit_phantom" = [
   "core/configuration/parameters_Rigid.txt",
   "core/configuration/parameters_Affine.txt",
   "core/configuration/parameters_B_Spline.txt",
+  "core/configuration/parameters_Rigid_speedy.txt",
+  "core/configuration/parameters_Affine_speedy.txt",
+  "core/configuration/parameters_B_Spline_speedy.txt",
   "core/configuration/vial-configurations.json",
 ] }
 package-dir = { "" = "src" }

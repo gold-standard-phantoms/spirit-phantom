@@ -104,10 +104,12 @@ def nema_slice_thickness(
         ]
         slice_profile = np.mean(slice_profile_set, axis=0)
 
-    fwhm_slope = full_width_half_maximum(slice_profile)
+    # full_width_half_maximum returns width in sample indices of the projected
+    # profile; convert to millimetres before applying the wedge-angle scaling.
+    fwhm_mm = full_width_half_maximum(slice_profile) * pixel_size
 
     ramp_slope_radians = math.radians(ramp_slope_degrees)
-    return fwhm_slope * math.tan(ramp_slope_radians)
+    return fwhm_mm * math.tan(ramp_slope_radians)
 
 
 def full_width_half_maximum(slice_profile: np.ndarray) -> float:
