@@ -18,7 +18,11 @@ from spirit_phantom.core.generate_slice_mask import (
     wedge_roi_corners,
 )
 from spirit_phantom.core.slice_thickness import nema_slice_thickness
-from spirit_phantom.core.slice_thickness_analysis import sample_rectangle_edge_response
+from spirit_phantom.core.slice_thickness_analysis import (
+    build_wedge_profile_diagnostics,
+    sample_rectangle_edge_response,
+    save_wedge_profile_diagnostics,
+)
 
 
 def test_save_slice_mask_writes_labelled_nifti(tmp_path: Path) -> None:
@@ -102,6 +106,43 @@ def test_wedge_roi_corners_has_two_rectangles() -> None:
     wedge_1 = [corner for corner in corners if corner.label == 1]
     assert wedge_1[0].point_mm == (-25.0, 0.0, 0.0)
     assert wedge_1[1].point_mm == (25.0, 0.0, 0.0)
+
+
+def test_save_wedge_profile_diagnostics_writes_csv_and_png(tmp_path: Path) -> None:
+    """Diagnostic export should write CSV curve data and a PNG plot."""
+    n_samples = 41
+    n_lines = 3
+    erf = np.zeros((n_samples, n_lines), dtype=np.float64)
+    erf[0:10, :] = 0.0
+    for index in range(10, 30):
+        erf[index, :] = float(index - 10)
+    erf[30:, :] = 20.0
+    # Mild line-to-line noise so per-line columns are distinct.
+    erf[:, 1] += 0.5
+    erf[:, 2] -= 0.5
+
+    pixel_size_mm = 1.0
+    thickness_mm = nema_slice_thickness(erf, pixel_size_mm, 15.0)
+    diagnostics = build_wedge_profile_diagnostics(
+        label=1,
+        erf_profiles=erf,
+        pixel_size_mm=pixel_size_mm,
+        ramp_slope_degrees=15.0,
+        thickness_mm=float(thickness_mm),
+    )
+    csv_path, plot_path = save_wedge_profile_diagnostics(
+        diagnostics=diagnostics,
+        output_directory=tmp_path,
+    )
+    assert csv_path.is_file()
+    assert plot_path.is_file()
+    assert plot_path.stat().st_size > 0
+
+    text = csv_path.read_text(encoding="utf-8")
+    assert "erf_mean" in text
+    assert "slice_profile_mean" in text
+    assert "thickness_mm" in text
+    assert text.count("\n") >= n_samples  # header + rows
 
 
 def test_sample_rectangle_edge_response_recovers_known_thickness() -> None:
