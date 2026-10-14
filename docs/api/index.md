@@ -12,8 +12,6 @@ Serve locally with `uv run mkdocs serve` or use the hosted site.
 - [Guarded registration](guarded_registration.md)
 - [Vials](vials.md)
 - [Slice thickness](slice_thickness.md)
-- [Atlas mask](atlas_mask.md) — `analyse map-mask` coordinator
-- [Atlas transfer](atlas_transfer.md) — 3-D affine label transfer
 - [Multi-echo thermometry](multi_echo_thermometry.md)
 - [Initial transform](initial_transform.md)
 - [Points](points.md)
