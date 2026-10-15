@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11, <3.14"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -1551,6 +1551,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pooch" },
     { name = "pydantic" },
+    { name = "scipy" },
     { name = "typer" },
 ]
 
@@ -1564,7 +1565,6 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
-    { name = "scipy" },
     { name = "scipy-stubs" },
     { name = "tox-uv" },
 ]
@@ -1577,6 +1577,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.5" },
     { name = "pooch", specifier = ">=1.8.2" },
     { name = "pydantic", specifier = ">=2.11.9" },
+    { name = "scipy", specifier = ">=1.16.3" },
     { name = "typer", specifier = ">=0.24.1" },
 ]
 
@@ -1590,7 +1591,6 @@ dev = [
     { name = "pytest", specifier = "~=8.1" },
     { name = "pytest-cov", specifier = "~=4.1" },
     { name = "ruff", specifier = ">=0.14.3" },
-    { name = "scipy", specifier = ">=1.16.3" },
     { name = "scipy-stubs", specifier = ">=1.16.3.2" },
     { name = "tox-uv", specifier = "~=1.14" },
 ]
