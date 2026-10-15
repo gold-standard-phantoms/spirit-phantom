@@ -129,7 +129,21 @@ In the combined case, detailed vial statistics are saved automatically to:
 
 `path/to/registration_output/vial_statistics_details.txt`
 
-`--analyse` currently accepts only `vial-measurements`. Other analyses are standalone `analyse` subcommands.
+`--analyse` accepts `vial-measurements` or `slice-thickness`. To register and
+measure slice thickness in one step:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --output-directory path/to/registration_output \
+  --analyse slice-thickness
+```
+
+Slice-thickness outputs are written to
+`path/to/registration_output/slice_thickness/`. `--ramp-slope-degrees` and
+`--discard-edge-lines` behave as in `analyse slice-thickness` below.
+
+Other analyses are standalone `analyse` subcommands.
 
 ## Standalone analyses
 
@@ -197,3 +211,23 @@ If `--output-mask-image-path` is omitted, the output defaults to:
 
 When `--vis` is enabled, a diagnostic plot is saved next to the mask as
 `<mask_stem>_sad_filter_plot.png`.
+
+### `analyse slice-thickness`
+
+Measure NEMA wedge slice thickness from a previous `register` run. The
+registration directory must contain `BSpline_Transform.txt`; this command does
+not register.
+
+```bash
+uv run spirit-phantom analyse slice-thickness \
+  path/to/registration_output \
+  path/to/scanner_image.nii.gz \
+  --ramp-slope-degrees 15 \
+  --discard-edge-lines 1
+```
+
+Pass the moving (atlas) image as a third argument if registration used a
+non-default atlas. Outputs default to
+`path/to/registration_output/slice_thickness/` (override with
+`--output-directory`) and include the wedge ROI and corner QC NIfTIs, per-wedge
+profile CSVs and plots, and `slice_thickness_summary.csv`.

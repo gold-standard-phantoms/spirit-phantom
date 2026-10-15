@@ -19,22 +19,48 @@ from spirit_phantom.core.initial_transform import (
     INITIAL_FLIP_TRANSFORM_FILENAME,
     write_initial_flip_transform,
 )
+from spirit_phantom.core.registration_constants import (
+    AFFINE_IMAGE_FILENAME,
+    AFFINE_PARAMETERS_IN_FILENAME,
+    AFFINE_TRANSFORM_FILENAME,
+    BSPLINE_IMAGE_FILENAME,
+    BSPLINE_PARAMETERS_IN_FILENAME,
+    BSPLINE_TRANSFORM_FILENAME,
+    RIGID_IMAGE_FILENAME,
+    RIGID_PARAMETERS_IN_FILENAME,
+    RIGID_TRANSFORM_FILENAME,
+    TRANSFORMED_COMPONENT_ATLAS_FILENAME,
+    ParameterSet,
+)
 
 logger = logging.getLogger(__name__)
-# Filename constants for output files
-RIGID_PARAMETERS_IN_FILENAME = "Rigid_Parameters_In.txt"
-AFFINE_PARAMETERS_IN_FILENAME = "Affine_Parameters_In.txt"
-BSPLINE_PARAMETERS_IN_FILENAME = "BSpline_Parameters_In.txt"
-RIGID_IMAGE_FILENAME = "Rigid_Image.nii.gz"
-AFFINE_IMAGE_FILENAME = "Affine_Image.nii.gz"
-BSPLINE_IMAGE_FILENAME = "Bspline_Image.nii.gz"
-RIGID_TRANSFORM_FILENAME = "Rigid_Transform.txt"
-AFFINE_TRANSFORM_FILENAME = "Affine_Transform.txt"
-BSPLINE_TRANSFORM_FILENAME = "BSpline_Transform.txt"
-TRANSFORMED_POINTS_FILENAME = "transformed_points.txt"
-TRANSFORMED_COMPONENT_ATLAS_FILENAME = "transformed_component_atlas.nii.gz"
 _REGISTRATION_STAGE_COUNT = 4
 _SECONDS_PER_MINUTE = 60
+
+
+_PARAMETER_FILENAMES: dict[ParameterSet, dict[str, str]] = {
+    ParameterSet.REGULAR: {
+        "rigid": "parameters_Rigid.txt",
+        "affine": "parameters_Affine.txt",
+        "bspline": "parameters_B_Spline.txt",
+    },
+}
+
+
+def parameter_filename(*, stage: str, parameter_set: ParameterSet) -> str:
+    """Resolve the packaged elastix parameter filename for a stage.
+
+    Args:
+        stage: Registration stage key: ``rigid``, ``affine``, or ``bspline``.
+        parameter_set: Elastix parameter set (regular).
+
+    Returns:
+        Packaged parameter filename under ``core/configuration``.
+
+    Raises:
+        KeyError: If ``stage`` is not a supported registration stage.
+    """
+    return _PARAMETER_FILENAMES[parameter_set][stage]
 
 
 def _format_duration(*, seconds: float) -> str:
@@ -267,6 +293,8 @@ def _perform_rigid_registration(
     moving_image: itk.Image,
     save_path: Path,
     initial_transform_file: Path | None = None,
+    *,
+    parameter_set: ParameterSet = ParameterSet.REGULAR,
 ) -> _StageResult:
     """Perform rigid registration stage.
 
@@ -276,13 +304,16 @@ def _perform_rigid_registration(
         save_path: Path to directory for saving transform files.
         initial_transform_file: Optional path to an initial transform parameter
             file to seed rigid registration.
+        parameter_set: Elastix parameter set (regular).
 
     Returns:
         _StageResult containing the registered image, transform, and all file paths.
     """
     logger.info("Perform rigid registration: start")
 
-    rigid_parameter_object = _load_parameter_object(filename="parameters_Rigid.txt")
+    rigid_parameter_object = _load_parameter_object(
+        filename=parameter_filename(stage="rigid", parameter_set=parameter_set)
+    )
     registration_kwargs: dict[str, str] = {}
     if initial_transform_file is not None:
         rigid_parameter_map = dict(rigid_parameter_object.GetParameterMap(0))
@@ -332,6 +363,8 @@ def _perform_affine_registration(
     moving_image: itk.Image,
     initial_transform_file: Path,
     save_path: Path,
+    *,
+    parameter_set: ParameterSet = ParameterSet.REGULAR,
 ) -> _StageResult:
     """Perform affine registration stage.
 
@@ -340,6 +373,7 @@ def _perform_affine_registration(
         moving_image: The moving (source) image to register.
         initial_transform_file: Path to the initial transform file (rigid).
         save_path: Path to directory for saving transform files.
+        parameter_set: Elastix parameter set (regular).
 
     Returns:
         _StageResult containing the registered image, transform, and all file paths.
@@ -347,7 +381,9 @@ def _perform_affine_registration(
     logger.info("Perform affine registration: start")
     # Save the parameters used by elastix to perform the affine transform
     parameters_path = save_path / AFFINE_PARAMETERS_IN_FILENAME
-    affine_parameter_object = _load_parameter_object(filename="parameters_Affine.txt")
+    affine_parameter_object = _load_parameter_object(
+        filename=parameter_filename(stage="affine", parameter_set=parameter_set)
+    )
     affine_parameter_object.WriteParameterFile(str(parameters_path))
 
     affine_image, affine_transform = itk.elastix_registration_method(
@@ -382,6 +418,8 @@ def _perform_bspline_registration(
     moving_image: itk.Image,
     initial_transform_file: Path,
     save_path: Path,
+    *,
+    parameter_set: ParameterSet = ParameterSet.REGULAR,
 ) -> _StageResult:
     """Perform B-spline registration stage.
 
@@ -390,6 +428,7 @@ def _perform_bspline_registration(
         moving_image: The moving (source) image to register.
         initial_transform_file: Path to the initial transform file (affine).
         save_path: Path to directory for saving transform files.
+        parameter_set: Elastix parameter set (regular).
 
     Returns:
         _StageResult containing the registered image, transform, and all file paths.
@@ -398,7 +437,7 @@ def _perform_bspline_registration(
     # Save parameters used by elastix to perform the B-Spline transform
     parameters_path = save_path / BSPLINE_PARAMETERS_IN_FILENAME
     bspline_parameter_object = _load_parameter_object(
-        filename="parameters_B_Spline.txt"
+        filename=parameter_filename(stage="bspline", parameter_set=parameter_set)
     )
     bspline_parameter_object.WriteParameterFile(str(parameters_path))
 
@@ -437,6 +476,7 @@ def _register(
     save_path: Path,
     *,
     phantom_inverted: bool = False,
+    parameter_set: ParameterSet = ParameterSet.REGULAR,
 ) -> tuple[itk.Image, itk.ParameterObject, list[Path]]:
     """Private register method that makes use of the three stage methods.
 
@@ -450,6 +490,7 @@ def _register(
         save_path: Path to directory for saving transform files. Must be writable.
         phantom_inverted: Whether to apply an initial 180-degree Y rotation
             before rigid registration.
+        parameter_set: Elastix parameter set (regular).
 
     Returns:
         A tuple of (registered_image, transform, list of paths).
@@ -495,12 +536,21 @@ def _register(
         moving_image,
         save_path,
         initial_transform_file=initial_transform_path,
+        parameter_set=parameter_set,
     )
     affine_result = _perform_affine_registration(
-        fixed_image, moving_image, rigid_result.transform_path, save_path
+        fixed_image,
+        moving_image,
+        rigid_result.transform_path,
+        save_path,
+        parameter_set=parameter_set,
     )
     bspline_result = _perform_bspline_registration(
-        fixed_image, moving_image, affine_result.transform_path, save_path
+        fixed_image,
+        moving_image,
+        affine_result.transform_path,
+        save_path,
+        parameter_set=parameter_set,
     )
 
     # Load the composed transform from file (includes chain information via
@@ -527,6 +577,7 @@ def register_atlas(
     output_directory: Path,
     cli_user: bool = False,
     phantom_inverted: bool = False,
+    parameter_set: ParameterSet = ParameterSet.REGULAR,
 ) -> RegistrationResult:
     """Register the moving image to the fixed image using file paths.
 
@@ -546,6 +597,7 @@ def register_atlas(
             numbered stage progress messages with elapsed times are printed.
         phantom_inverted: Whether to apply an initial 180-degree Y rotation
             before rigid registration.
+        parameter_set: Elastix parameter set (regular).
 
     Returns:
         RegistrationResult containing paths to all output files including
@@ -578,6 +630,7 @@ def register_atlas(
     registration_started_at = time.perf_counter()
     if cli_user:
         print("Loading images...")
+        print(f"Parameter set: {parameter_set.value}")
 
     # Load images from file paths
     moving_image_itk = itk.imread(str(moving_image), itk.F)
@@ -601,6 +654,7 @@ def register_atlas(
         moving_image_itk,
         output_directory,
         initial_transform_file=initial_transform_path,
+        parameter_set=parameter_set,
     )
     _print_cli_stage_done(
         stage=1,
@@ -615,7 +669,11 @@ def register_atlas(
         enabled=cli_user,
     )
     affine_result = _perform_affine_registration(
-        fixed_image_itk, moving_image_itk, rigid_result.transform_path, output_directory
+        fixed_image_itk,
+        moving_image_itk,
+        rigid_result.transform_path,
+        output_directory,
+        parameter_set=parameter_set,
     )
     _print_cli_stage_done(
         stage=2,
@@ -634,6 +692,7 @@ def register_atlas(
         moving_image_itk,
         affine_result.transform_path,
         output_directory,
+        parameter_set=parameter_set,
     )
     _print_cli_stage_done(
         stage=3,
