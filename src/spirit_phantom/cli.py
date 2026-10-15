@@ -6,7 +6,8 @@ The registration command defaults to a SPIRIT atlas image downloaded with
 Top-level command groups:
 
 - ``register`` for atlas-to-scanner registration.
-- ``analyse`` for product analyses (vial measurements, map-mask, eg-mask).
+- ``analyse`` for product analyses (vial measurements, map-mask, eg-mask,
+  slice-thickness).
 - ``developer`` for quality-control helpers (dice, vials).
 """
 
@@ -40,12 +41,16 @@ app.add_typer(developer_app, name="developer")
 # multi-echo thermometry (matplotlib/nibabel) until eg-mask runs.
 _EG_MASK_MIN_SAD_COUNTS_DEFAULT = 1000.0
 _EG_MASK_DILATION_ITERATIONS_DEFAULT = 1
+_SLICE_THICKNESS_RAMP_SLOPE_DEGREES_DEFAULT = 15.0
+_SLICE_THICKNESS_DISCARD_EDGE_LINES_DEFAULT = 1
+_SLICE_THICKNESS_OUTPUT_SUBDIRECTORY = "slice_thickness"
 
 
 class AnalysisMethod(StrEnum):
     """Supported analysis methods for CLI workflows."""
 
     VIAL_MEASUREMENTS = "vial-measurements"
+    SLICE_THICKNESS = "slice-thickness"
 
 
 def _configure_verbose_logging() -> None:
@@ -155,6 +160,107 @@ def _run_vial_measurements(
             output_path=output_directory / "vial_statistics_details.txt",
         )
         print(f"Saved detailed vial statistics: {output_path}")
+
+
+def _validate_slice_thickness_options(
+    *, ramp_slope_degrees: float, discard_edge_lines: int
+) -> None:
+    """Validate slice-thickness CLI options.
+
+    Args:
+        ramp_slope_degrees: Wedge angle in degrees.
+        discard_edge_lines: Short-axis edge lines discarded from each end.
+
+    Raises:
+        typer.BadParameter: If either value is out of range.
+    """
+    if not 0.0 < ramp_slope_degrees < 90.0:  # noqa: PLR2004
+        msg = "--ramp-slope-degrees must be between 0 and 90 (exclusive)."
+        raise typer.BadParameter(msg)
+    if discard_edge_lines < 0:
+        msg = "--discard-edge-lines must be greater than or equal to 0."
+        raise typer.BadParameter(msg)
+
+
+def _run_slice_thickness(
+    *,
+    fixed_image_path: Path,
+    moving_image_path: Path,
+    registration_directory: Path,
+    output_directory: Path,
+    ramp_slope_degrees: float,
+    discard_edge_lines: int,
+    quiet: bool,
+) -> None:
+    """Measure wedge slice thickness from an existing registration and print results.
+
+    Args:
+        fixed_image_path: Scanner (fixed) image used as the registration target.
+        moving_image_path: Atlas (moving) image used for registration.
+        registration_directory: Registration output directory containing the
+            final B-spline transform.
+        output_directory: Directory for point files, QC masks and profile exports.
+        ramp_slope_degrees: Wedge angle used by the NEMA calculation.
+        discard_edge_lines: Short-axis edge lines discarded from each end.
+        quiet: Suppress progress messages.
+
+    Raises:
+        typer.BadParameter: If the registration transform is missing.
+        typer.Exit: If the analysis fails.
+    """
+    # Constants only here; registration.py pulls in ITK.
+    from spirit_phantom.core.registration_constants import (  # noqa: PLC0415
+        BSPLINE_IMAGE_FILENAME,
+        BSPLINE_TRANSFORM_FILENAME,
+    )
+
+    transform_path = registration_directory / BSPLINE_TRANSFORM_FILENAME
+    if not transform_path.is_file():
+        msg = (
+            f"Transform file not found: {transform_path}. "
+            "Run `spirit-phantom register` first."
+        )
+        raise typer.BadParameter(msg)
+
+    moving_geometry_path = registration_directory / BSPLINE_IMAGE_FILENAME
+    if not moving_geometry_path.is_file():
+        moving_geometry_path = moving_image_path
+
+    _emit_cli_message(
+        "Mapping wedge corners into fixed space and measuring thickness...",
+        quiet=quiet,
+    )
+    from spirit_phantom.core.slice_thickness_analysis import (  # noqa: PLC0415
+        measure_slice_thickness_from_fixed_wedges,
+    )
+
+    try:
+        results = measure_slice_thickness_from_fixed_wedges(
+            fixed_image_path=fixed_image_path,
+            transform_parameter_path=transform_path,
+            moving_image_path=moving_geometry_path,
+            output_directory=output_directory,
+            atlas_image_path=moving_image_path,
+            ramp_slope_degrees=ramp_slope_degrees,
+            discard_edge_lines=discard_edge_lines,
+        )
+    except (RuntimeError, ValueError) as error:
+        typer.secho(
+            f"Slice-thickness analysis failed: {error}",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1) from error
+
+    print("wedge_label | thickness_mm | pixel_size_mm | n_lines | n_samples")
+    for result in results:
+        print(
+            f"{result.label} | {result.thickness_mm:.4f} | "
+            f"{result.pixel_size_mm:.4f} | {result.n_lines} | {result.n_samples}"
+        )
+    resolved_output = output_directory.resolve()
+    print(f"Slice-thickness outputs: {resolved_output}")
+    print(f"Thickness summary CSV: {resolved_output / 'slice_thickness_summary.csv'}")
 
 
 def _build_checkerboard_slice_indices(*, fixed_image_path: Path) -> list[int]:
@@ -303,7 +409,7 @@ def _run_vial_segmentation_accuracy_analysis(
 
 
 @app.command()
-def register(  # noqa: PLR0913
+def register(  # noqa: PLR0913, C901
     fixed_image: Annotated[
         Path,
         typer.Argument(help="Path to the fixed (scanner) image."),
@@ -340,6 +446,23 @@ def register(  # noqa: PLR0913
             help="Erosion voxels for vial measurement analysis.",
         ),
     ] = 0,
+    ramp_slope_degrees: Annotated[
+        float,
+        typer.Option(
+            "--ramp-slope-degrees",
+            help="Wedge angle in degrees for slice-thickness analysis.",
+        ),
+    ] = _SLICE_THICKNESS_RAMP_SLOPE_DEGREES_DEFAULT,
+    discard_edge_lines: Annotated[
+        int,
+        typer.Option(
+            "--discard-edge-lines",
+            help=(
+                "Profile lines dropped from each wedge edge for slice-thickness "
+                "analysis (reduces partial-volume contamination)."
+            ),
+        ),
+    ] = _SLICE_THICKNESS_DISCARD_EDGE_LINES_DEFAULT,
     generate_checkerboards: Annotated[
         bool,
         typer.Option(
@@ -383,6 +506,8 @@ def register(  # noqa: PLR0913
         output_directory: Directory for registration outputs.
         analyse: Optional analysis method to run after registration.
         erosion_voxels: Erosion voxels for vial measurement analysis.
+        ramp_slope_degrees: Wedge angle for slice-thickness analysis.
+        discard_edge_lines: Edge lines dropped for slice-thickness analysis.
         generate_checkerboards: Whether checkerboard images should be generated.
         phantom_inverted: Whether an initial orientation correction should be
             applied for an inverted phantom scan.
@@ -395,6 +520,13 @@ def register(  # noqa: PLR0913
 
     if verbose:
         _configure_verbose_logging()
+
+    if analyse == AnalysisMethod.SLICE_THICKNESS:
+        # Fail fast before spending minutes on registration.
+        _validate_slice_thickness_options(
+            ramp_slope_degrees=ramp_slope_degrees,
+            discard_edge_lines=discard_edge_lines,
+        )
 
     if moving_image is not None:
         resolved_moving_image = moving_image
@@ -415,7 +547,6 @@ def register(  # noqa: PLR0913
             "Phantom inverted: applying initial 180-degree Y-rotation.",
             quiet=quiet,
         )
-
     # Isolate registration after atlas prep so the parent CLI survives OOM kills.
     _emit_cli_message("Starting isolated registration...", quiet=quiet)
     from spirit_phantom.core.guarded_registration import (  # noqa: PLC0415
@@ -475,6 +606,18 @@ def register(  # noqa: PLR0913
             erosion_voxels=erosion_voxels,
             output_directory=resolved_output_directory,
             save_results=True,
+        )
+    elif analyse == AnalysisMethod.SLICE_THICKNESS:
+        _emit_cli_message("Running analysis: slice-thickness", quiet=quiet)
+        _run_slice_thickness(
+            fixed_image_path=fixed_image,
+            moving_image_path=resolved_moving_image,
+            registration_directory=resolved_output_directory,
+            output_directory=resolved_output_directory
+            / _SLICE_THICKNESS_OUTPUT_SUBDIRECTORY,
+            ramp_slope_degrees=ramp_slope_degrees,
+            discard_edge_lines=discard_edge_lines,
+            quiet=quiet,
         )
 
 
@@ -678,6 +821,115 @@ def analyse_eg_mask(
             "Saved EG mask Sum of Absolute Differences diagnostic plot: "
             f"{saved_path.parent / f'{mask_stem}_sad_filter_plot.png'}"
         )
+
+
+@analyse_app.command("slice-thickness")
+def analyse_slice_thickness(
+    registration_directory: Annotated[
+        Path,
+        typer.Argument(
+            help=(
+                "Registration output directory from `register` "
+                "(must contain BSpline_Transform.txt)."
+            ),
+        ),
+    ],
+    fixed_image: Annotated[
+        Path,
+        typer.Argument(help="Scanner (fixed) image used as the registration target."),
+    ],
+    moving_image: Annotated[
+        Path | None,
+        typer.Argument(
+            help=(
+                "Atlas (moving) image used for registration. If omitted, the "
+                "default SPIRIT atlas is downloaded and cached with pooch."
+            )
+        ),
+    ] = None,
+    *,
+    output_directory: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-directory",
+            "-o",
+            help=(
+                "Directory for point files, QC masks and profile exports. "
+                "Defaults to <registration_directory>/slice_thickness."
+            ),
+        ),
+    ] = None,
+    ramp_slope_degrees: Annotated[
+        float,
+        typer.Option(
+            "--ramp-slope-degrees",
+            help="Wedge angle in degrees (SPIRIT default 15).",
+        ),
+    ] = _SLICE_THICKNESS_RAMP_SLOPE_DEGREES_DEFAULT,
+    discard_edge_lines: Annotated[
+        int,
+        typer.Option(
+            "--discard-edge-lines",
+            help=(
+                "Drop this many short-axis profile lines from each wedge edge "
+                "before averaging (reduces partial-volume contamination). "
+                "Use 0 to keep every sampled line."
+            ),
+        ),
+    ] = _SLICE_THICKNESS_DISCARD_EDGE_LINES_DEFAULT,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress progress messages."),
+    ] = False,
+) -> None:
+    """Measure NEMA wedge slice thickness from an existing registration.
+
+    Inversely maps atlas wedge-corner points into fixed space using the final
+    registration transform, samples edge-response rectangles from the fixed
+    image, and prints per-wedge slice thickness. To register and measure in one
+    step, use ``register --analyse slice-thickness``.
+
+    Args:
+        registration_directory: Existing registration output directory.
+        fixed_image: Scanner (fixed) image used as the registration target.
+        moving_image: Atlas (moving) image used for registration.
+        output_directory: Output directory for analysis artefacts.
+        ramp_slope_degrees: Wedge angle used by the NEMA calculation.
+        discard_edge_lines: Short-axis edge lines discarded from each end.
+        quiet: Suppress progress messages.
+    """
+    if not registration_directory.is_dir():
+        msg = f"Registration directory not found: {registration_directory}"
+        raise typer.BadParameter(msg)
+    if not fixed_image.exists():
+        msg = f"Fixed image file not found: {fixed_image}"
+        raise typer.BadParameter(msg)
+    if moving_image is not None and not moving_image.exists():
+        msg = f"Moving image file not found: {moving_image}"
+        raise typer.BadParameter(msg)
+    _validate_slice_thickness_options(
+        ramp_slope_degrees=ramp_slope_degrees,
+        discard_edge_lines=discard_edge_lines,
+    )
+
+    resolved_moving_image = (
+        moving_image
+        if moving_image is not None
+        else _resolve_default_atlases(quiet=quiet)
+    )
+    _run_slice_thickness(
+        fixed_image_path=fixed_image,
+        moving_image_path=resolved_moving_image,
+        registration_directory=registration_directory,
+        output_directory=(
+            output_directory
+            if output_directory is not None
+            else registration_directory / _SLICE_THICKNESS_OUTPUT_SUBDIRECTORY
+        ),
+        ramp_slope_degrees=ramp_slope_degrees,
+        discard_edge_lines=discard_edge_lines,
+        quiet=quiet,
+    )
 
 
 @developer_app.command("dice")
