@@ -19,3 +19,4 @@ Serve locally with `uv run mkdocs serve` or use the hosted site.
 - [Points](points.md)
 - [Visualisation](visualisation.md)
 - [Binary morphology](binary_morphology.md)
+- [Interpolation](interpolation.md)
