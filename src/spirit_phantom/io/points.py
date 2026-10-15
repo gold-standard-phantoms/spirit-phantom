@@ -9,11 +9,26 @@ Transformix format:
     x1 y1 [z1]
     x2 y2 [z2]
     ...
+
+Coordinate convention
+---------------------
+Public helpers that talk to transformix
+(:func:`transform_points_with_transformix`,
+:func:`invert_points_through_transformix`) accept and return **NIfTI / nibabel
+world coordinates** — the same millimetre frame as ``image.affine @ (i, j, k,
+1)``.
+
+ITK / elastix / transformix use **LPS** physical space when reading NIfTI
+files (``itk.imread``), which differs from nibabel's RAS-style affine frame by
+a sign flip on X and Y. Conversion is applied at the transformix boundary so
+callers (atlas wedge ROIs, nibabel sampling/masks) stay consistent.
 """
 
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
+
+import itk
 
 # Supported dimensions for point transformations
 DIM_2D = 2
@@ -25,6 +40,38 @@ _MIN_HEADER_LINES = 2
 _PointType = Literal["point", "index"]
 _Point = Sequence[float]
 _Points = Sequence[_Point]
+
+
+def nifti_world_to_itk_physical(point: _Point) -> list[float]:
+    """Convert a NIfTI/nibabel world point to ITK/transformix physical space.
+
+    For NIfTI images, ITK applies a RAS→LPS flip: ``(x, y, z) → (-x, -y, z)``.
+
+    Args:
+        point: World coordinates from a nibabel affine (2-D or 3-D).
+
+    Returns:
+        Coordinates in ITK physical space.
+    """
+    coords = [float(value) for value in point]
+    if len(coords) >= DIM_2D:
+        coords[0] = -coords[0]
+        coords[1] = -coords[1]
+    return coords
+
+
+def itk_physical_to_nifti_world(point: _Point) -> list[float]:
+    """Convert an ITK/transformix physical point to NIfTI/nibabel world space.
+
+    Inverse of :func:`nifti_world_to_itk_physical` (same X/Y sign flip).
+
+    Args:
+        point: Physical coordinates from ITK / transformix (2-D or 3-D).
+
+    Returns:
+        Coordinates in the nibabel affine world frame.
+    """
+    return nifti_world_to_itk_physical(point)
 
 
 def _parse_header(lines: list[str]) -> int:
@@ -181,6 +228,135 @@ def save_points(
                 raise ValueError(msg)
             coords_str = " ".join(str(coord) for coord in pt)
             f.write(f"{coords_str}\n")
+
+
+def transform_points_with_transformix(
+    *,
+    points: _Points,
+    transform_parameter_path: Path,
+    moving_image_path: Path,
+    output_directory: Path,
+    input_points_filename: str = "inputpoints.txt",
+) -> list[list[float]]:
+    """Transform points with transformix (fixed domain → moving domain).
+
+    Elastix stores ``T`` mapping fixed → moving. Transformix therefore takes
+    input points in the fixed image domain and returns moving-domain points.
+    The moving image is only used to establish dimensionality/geometry.
+
+    Args:
+        points: NIfTI/nibabel world-coordinate points in the fixed image
+            domain (same frame as ``fixed_image.affine``).
+        transform_parameter_path: Elastix transform parameter file. May chain
+            further transforms via ``InitialTransformParameterFileName``.
+        moving_image_path: Moving image path used by transformix for geometry.
+        output_directory: Directory for transformix ``inputpoints.txt`` and
+            ``outputpoints.txt``.
+        input_points_filename: Filename for the written input point set.
+
+    Returns:
+        Transformed points in the moving image domain, still in NIfTI/nibabel
+        world coordinates.
+    """
+    output_directory.mkdir(parents=True, exist_ok=True)
+    input_points_path = output_directory / input_points_filename
+    # Transformix consumes ITK LPS physical coordinates.
+    itk_points = [nifti_world_to_itk_physical(point) for point in points]
+    save_points(points=itk_points, output_path=input_points_path, point_type="point")
+
+    moving_image = itk.imread(str(moving_image_path), itk.F)
+    transform_parameters = itk.ParameterObject.New()
+    transform_parameters.ReadParameterFile(str(transform_parameter_path))
+    itk.transformix_pointset(
+        moving_image,
+        transform_parameters,
+        fixed_point_set_file_name=str(input_points_path),
+        output_directory=str(output_directory),
+    )
+    itk_output = parse_transformix_output(
+        output_path=output_directory / "outputpoints.txt"
+    )
+    return [itk_physical_to_nifti_world(point) for point in itk_output]
+
+
+def invert_points_through_transformix(
+    *,
+    moving_points: _Points,
+    transform_parameter_path: Path,
+    moving_image_path: Path,
+    output_directory: Path,
+    max_iterations: int = 10,
+    tolerance_mm: float = 1e-4,
+) -> list[list[float]]:
+    """Map moving-domain points into fixed space by inverting transformix ``T``.
+
+    Finds fixed points ``x`` such that ``T(x) ≈ p_moving`` using fixed-point
+    iteration ``x ← p - (T(x) - x)``. Useful for atlas landmarks that should
+    land in scan (fixed) space after registration.
+
+    Args:
+        moving_points: NIfTI/nibabel world-coordinate points in the
+            moving/atlas domain (same frame as the atlas affine).
+        transform_parameter_path: Forward elastix transform (fixed → moving).
+        moving_image_path: Moving image path used by transformix for geometry.
+        output_directory: Directory for per-iteration transformix outputs.
+        max_iterations: Maximum fixed-point iterations.
+        tolerance_mm: Stop when max absolute residual in millimetres is below
+            this threshold.
+
+    Returns:
+        Corresponding NIfTI/nibabel world-coordinate points in the fixed image
+        domain (compatible with ``fixed_image.affine`` and nibabel masks).
+
+    Raises:
+        ValueError: If ``moving_points`` is empty.
+        RuntimeError: If the iteration fails to converge.
+    """
+    output_directory.mkdir(parents=True, exist_ok=True)
+    targets = [list(map(float, point)) for point in moving_points]
+    if not targets:
+        msg = "Cannot invert an empty point set"
+        raise ValueError(msg)
+
+    estimates = [point.copy() for point in targets]
+    residual = float("inf")
+    for iteration in range(max_iterations):
+        iteration_directory = output_directory / f"iteration_{iteration:02d}"
+        mapped = transform_points_with_transformix(
+            points=estimates,
+            transform_parameter_path=transform_parameter_path,
+            moving_image_path=moving_image_path,
+            output_directory=iteration_directory,
+        )
+        next_estimates: list[list[float]] = []
+        residual = 0.0
+        for target, estimate, mapped_point in zip(
+            targets, estimates, mapped, strict=True
+        ):
+            point_residual = max(
+                abs(mapped_point[dim] - target[dim]) for dim in range(len(target))
+            )
+            residual = max(residual, point_residual)
+            next_estimates.append(
+                [
+                    target[dim] - (mapped_point[dim] - estimate[dim])
+                    for dim in range(len(target))
+                ]
+            )
+        estimates = next_estimates
+        if residual <= tolerance_mm:
+            save_points(
+                points=estimates,
+                output_path=output_directory / "fixed_space_points.txt",
+                point_type="point",
+            )
+            return estimates
+
+    msg = (
+        f"Moving-to-fixed inversion did not converge after {max_iterations} "
+        f"iterations (residual={residual:.6g} mm, tolerance={tolerance_mm} mm)."
+    )
+    raise RuntimeError(msg)
 
 
 def parse_transformix_output(output_path: Path) -> list[list[float]]:
