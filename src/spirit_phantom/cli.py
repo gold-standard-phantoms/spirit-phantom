@@ -3,12 +3,11 @@
 The registration command defaults to a SPIRIT atlas image downloaded with
 `pooch` when a moving image is not provided explicitly.
 
-The ``analyse`` command group includes:
+Top-level command groups:
 
-- ``vial-measurements`` for per-vial intensity statistics.
-- ``dice`` for per-vial overlap scores between manual and atlas labels.
-- ``vials`` for per-vial segmentation accuracy metrics (manual vs atlas).
-- ``eg-mask`` for ethylene glycol vial mask generation from multi-echo data.
+- ``register`` for atlas-to-scanner registration.
+- ``analyse`` for product analyses (vial measurements, map-mask, eg-mask).
+- ``developer`` for quality-control helpers (dice, vials).
 """
 
 from __future__ import annotations
@@ -31,7 +30,11 @@ if TYPE_CHECKING:
 
 app = typer.Typer(help="SPIRIT phantom command line tools.")
 analyse_app = typer.Typer(help="Run analyses on registered phantom data.")
+developer_app = typer.Typer(
+    help="Developer quality-control helpers (Dice scores, segmentation accuracy)."
+)
 app.add_typer(analyse_app, name="analyse")
+app.add_typer(developer_app, name="developer")
 
 # Keep EG-mask CLI defaults local so importing the CLI does not pull
 # multi-echo thermometry (matplotlib/nibabel) until eg-mask runs.
@@ -520,92 +523,62 @@ def analyse_vial_measurements(
     )
 
 
-@analyse_app.command("dice")
-def analyse_dice(
-    manual_segmentation_image_path: Annotated[
+@analyse_app.command("map-mask")
+def analyse_map_mask(
+    registered_component_atlas: Annotated[
         Path,
         typer.Argument(
-            help=(
-                "Manual vial segmentation (labels 1..22 for vials A..V) in "
-                "scanner (fixed) image space."
-            ),
+            help="Path to the registered component atlas labelled segmentation NIfTI image."
         ),
     ],
-    registered_atlas_image_path: Annotated[
+    scan: Annotated[
         Path,
-        typer.Argument(
+        typer.Argument(help="Path to the NIfTI scan image."),
+    ],
+    *,
+    output_mask_image_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-mask-image-path",
+            "-o",
             help=(
-                "Registered component atlas labels in the same scanner space, "
-                "typically registration output transformed_component_atlas.nii.gz."
+                "Optional output path for the saved mask NIfTI. Defaults to "
+                "mapped_atlas_mask_<scan_stem>.nii.gz beside the registered "
+                "component atlas (registration output directory)."
             ),
         ),
-    ],
+    ] = None,
 ) -> None:
-    """Compute and print a per-vial Dice score table.
+    """Map all atlas labels onto a scan image and save the mapped mask.
 
     Args:
-        manual_segmentation_image_path: Manual segmentation on the scanner image
-            where labels 1..22 map to vials A..V (21=U, 22=V).
-        registered_atlas_image_path: Labelled component atlas warped into scanner
-            space (configured atlas segment indices per vial).
+        registered_component_atlas: Path to the registered component atlas.
+        scan: Path to the scan NIfTI image.
+        output_mask_image_path: Optional explicit output path for the saved mask.
+            When omitted, the mask is written next to the registered atlas and
+            named from the scan stem.
     """
-    from spirit_phantom.core.vials import generate_dice_score_table  # noqa: PLC0415
-
-    if not manual_segmentation_image_path.exists():
-        msg = f"Manual segmentation file not found: {manual_segmentation_image_path}"
+    if not registered_component_atlas.exists():
+        msg = f"Registered component atlas file not found: {registered_component_atlas}"
         raise typer.BadParameter(msg)
-    if not registered_atlas_image_path.exists():
-        msg = f"Registered atlas file not found: {registered_atlas_image_path}"
+    if not scan.exists():
+        msg = f"Scan file not found: {scan}"
         raise typer.BadParameter(msg)
 
     try:
-        rows = generate_dice_score_table(
-            manual_segmentation_image_path=manual_segmentation_image_path,
-            registered_atlas_image_path=registered_atlas_image_path,
+        from spirit_phantom.core.atlas_mask import (  # noqa: PLC0415
+            coordinate_mapped_atlas_mask,
+        )
+
+        saved_path = coordinate_mapped_atlas_mask(
+            registered_component_atlas_image_path=registered_component_atlas,
+            scan_image_path=scan,
+            output_mask_image_path=output_mask_image_path,
         )
     except ValueError as error:
         raise typer.BadParameter(str(error)) from error
 
-    print(_format_dice_score_rows_table(rows=rows))
-
-
-@analyse_app.command("vials")
-def analyse_vials(
-    manual_segmentation_image_path: Annotated[
-        Path,
-        typer.Argument(
-            help=(
-                "Manual vial segmentation (labels 1..22 for vials A..V) in "
-                "scanner (fixed) image space."
-            ),
-        ),
-    ],
-    registered_atlas_image_path: Annotated[
-        Path,
-        typer.Argument(
-            help=(
-                "Registered component atlas labels in the same scanner space, "
-                "typically registration output transformed_component_atlas.nii.gz."
-            ),
-        ),
-    ],
-) -> None:
-    """Compute and print per-vial segmentation accuracy metrics.
-
-    Same inputs as ``analyse dice``. Compares manual segmentation (ground truth) to
-    the registered component atlas per vial. The table includes FPR, FNR, overlap
-    counts, confusion counts (TP/FP/FN/TN), sensitivity, and specificity.
-
-    Args:
-        manual_segmentation_image_path: Manual segmentation on the scanner image
-            where labels 1..22 map to vials A..V (21=U, 22=V).
-        registered_atlas_image_path: Labelled component atlas warped into scanner
-            space (configured atlas segment indices per vial).
-    """
-    _run_vial_segmentation_accuracy_analysis(
-        manual_segmentation_image_path=manual_segmentation_image_path,
-        registered_atlas_image_path=registered_atlas_image_path,
-    )
+    print(f"Saved mapped atlas mask: {saved_path}")
 
 
 @analyse_app.command("eg-mask")
@@ -705,6 +678,94 @@ def analyse_eg_mask(
             "Saved EG mask Sum of Absolute Differences diagnostic plot: "
             f"{saved_path.parent / f'{mask_stem}_sad_filter_plot.png'}"
         )
+
+
+@developer_app.command("dice")
+def developer_dice(
+    manual_segmentation_image_path: Annotated[
+        Path,
+        typer.Argument(
+            help=(
+                "Manual vial segmentation (labels 1..22 for vials A..V) in "
+                "scanner (fixed) image space."
+            ),
+        ),
+    ],
+    registered_atlas_image_path: Annotated[
+        Path,
+        typer.Argument(
+            help=(
+                "Registered component atlas labels in the same scanner space, "
+                "typically registration output transformed_component_atlas.nii.gz."
+            ),
+        ),
+    ],
+) -> None:
+    """Compute and print a per-vial Dice score table.
+
+    Args:
+        manual_segmentation_image_path: Manual segmentation on the scanner image
+            where labels 1..22 map to vials A..V (21=U, 22=V).
+        registered_atlas_image_path: Labelled component atlas warped into scanner
+            space (configured atlas segment indices per vial).
+    """
+    from spirit_phantom.core.vials import generate_dice_score_table  # noqa: PLC0415
+
+    if not manual_segmentation_image_path.exists():
+        msg = f"Manual segmentation file not found: {manual_segmentation_image_path}"
+        raise typer.BadParameter(msg)
+    if not registered_atlas_image_path.exists():
+        msg = f"Registered atlas file not found: {registered_atlas_image_path}"
+        raise typer.BadParameter(msg)
+
+    try:
+        rows = generate_dice_score_table(
+            manual_segmentation_image_path=manual_segmentation_image_path,
+            registered_atlas_image_path=registered_atlas_image_path,
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    print(_format_dice_score_rows_table(rows=rows))
+
+
+@developer_app.command("vials")
+def developer_vials(
+    manual_segmentation_image_path: Annotated[
+        Path,
+        typer.Argument(
+            help=(
+                "Manual vial segmentation (labels 1..22 for vials A..V) in "
+                "scanner (fixed) image space."
+            ),
+        ),
+    ],
+    registered_atlas_image_path: Annotated[
+        Path,
+        typer.Argument(
+            help=(
+                "Registered component atlas labels in the same scanner space, "
+                "typically registration output transformed_component_atlas.nii.gz."
+            ),
+        ),
+    ],
+) -> None:
+    """Compute and print per-vial segmentation accuracy metrics.
+
+    Same inputs as ``developer dice``. Compares manual segmentation (ground truth)
+    to the registered component atlas per vial. The table includes FPR, FNR,
+    overlap counts, confusion counts (TP/FP/FN/TN), sensitivity, and specificity.
+
+    Args:
+        manual_segmentation_image_path: Manual segmentation on the scanner image
+            where labels 1..22 map to vials A..V (21=U, 22=V).
+        registered_atlas_image_path: Labelled component atlas warped into scanner
+            space (configured atlas segment indices per vial).
+    """
+    _run_vial_segmentation_accuracy_analysis(
+        manual_segmentation_image_path=manual_segmentation_image_path,
+        registered_atlas_image_path=registered_atlas_image_path,
+    )
 
 
 def main() -> None:

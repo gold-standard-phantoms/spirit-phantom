@@ -29,8 +29,10 @@ Skip the transfer step when the clinical image is the registration target: `regi
 ## What you can do
 
 - Register a scanner image and measure vials — CLI (`register`, `analyse vial-measurements`)
+- Transfer atlas labels onto another scan grid — CLI (`analyse map-mask`)
 - NEMA slice thickness — Python API only (no CLI yet)
 - Thermometry — in development (ethylene glycol mask helpers exist; no temperature analysis yet)
+- Developer QC helpers — CLI (`developer dice`, `developer vials`); see [Developer tools](docs/developer-tools.md)
 
 ## Installation
 
@@ -43,12 +45,19 @@ uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom'
 
 ## Command line
 
+The CLI has three top-level groups:
+
+- `register` — atlas-to-scanner registration
+- `analyse` — product analyses (`vial-measurements`, `map-mask`, `eg-mask`)
+- `developer` — quality-control helpers (`dice`, `vials`); see [Developer tools](docs/developer-tools.md)
+
 List commands and options:
 
 ```bash
 uv run spirit-phantom --help
 uv run spirit-phantom register --help
 uv run spirit-phantom analyse --help
+uv run spirit-phantom developer --help
 ```
 
 Register the default SPIRIT atlas to a high-resolution scanner image, then measure vials and write checkerboard quality-control images:
@@ -68,121 +77,6 @@ uv run spirit-phantom analyse vial-measurements \
   path/to/scanner_image.nii.gz
 ```
 
-Full command reference: [CLI usage](docs/cli.md).
-
-## Documentation
-
-Narrative guides are ordinary Markdown and can be read on GitHub:
-
-- [CLI usage](docs/cli.md)
-- [Python API usage](docs/python-api.md)
-- [Developer tools](docs/developer-tools.md)
-
-```bash
-uv run spirit-phantom analyse dice \
-  path/to/manual_segmentation.nii.gz \
-  path/to/registration_output\transformed_component_atlas.nii.gz
-```
-
-Example output:
-
-```text
-vial_id | manual_label | atlas_label | dice_score | manual_voxels | atlas_voxels | intersection_voxels
---------+--------------+-------------+------------+---------------+--------------+--------------------
-A       | 1            | 17          | 0.953306   | 71937         | 68809        | 67087
-B       | 2            | 18          | 0.935174   | 72022         | 67798        | 65378
-C       | 3            | 20          | 0.883508   | 83733         | 66706        | 66457
-D       | 4            | 19          | 0.912901   | 79834         | 67952        | 67457
-E       | 5            | 11          | 0.793889   | 31786         | 21884        | 21304
-F       | 6            | 14          | 0.745040   | 28619         | 23099        | 19266
-G       | 7            | 13          | 0.850703   | 26287         | 22696        | 20835
-H       | 8            | 10          | 0.805932   | 26067         | 22751        | 19672
-I       | 9            | 6           | 0.871800   | 25312         | 22582        | 20877
-J       | 10           | 3           | 0.868149   | 21747         | 23577        | 19674
-K       | 11           | 4           | 0.874160   | 28492         | 23153        | 22573
-L       | 12           | 7           | 0.779448   | 25042         | 23128        | 18773
-M       | 13           | 12          | 0.922296   | 21461         | 23067        | 20534
-N       | 14           | 16          | 0.886580   | 25631         | 23064        | 21586
-O       | 15           | 15          | 0.889272   | 24369         | 22656        | 20909
-P       | 16           | 9           | 0.785631   | 27937         | 21529        | 19431
-Q       | 17           | 5           | 0.841078   | 27870         | 21607        | 20807
-R       | 18           | 1           | 0.886068   | 24611         | 22110        | 20699
-S       | 19           | 2           | 0.857560   | 28164         | 22510        | 21728
-T       | 20           | 8           | 0.883388   | 25756         | 21752        | 20984
-...
-U       | 21           | 21          | ...        | ...           | ...          | ...
-V       | 22           | 22          | ...        | ...           | ...          | ...
-```
-
-The full table has 22 rows (vials `A..V`). Thermometry vials `U` and `V` use manual labels and atlas segment indices `21` and `22`.
-
-The `analyse dice` command expects:
-
-- Manual segmentation in scanner (fixed) image space where labels `1..22` represent vials `A..V`.
-- Registered component atlas segmentation in the same scanner space (`transformed_component_atlas.nii.gz` from `register`), on the same voxel grid as the manual mask.
-
-The output table includes:
-
-- `vial_id`, `manual_label`, `atlas_label`
-- `dice_score`
-- `manual_voxels`, `atlas_voxels`, `intersection_voxels`
-
-Interpretation notes:
-
-- `dice_score` ranges from `0` (no overlap) to `1` (perfect overlap).
-- `manual_label` and `atlas_label` show which connected components were matched for each vial.
-- `intersection_voxels` is the overlap used in the Dice calculation.
-- A lower Dice score with large voxel count differences can indicate local misregistration or segmentation mismatch.
-
-If the two images have different shapes, the command exits with a clear validation error.
-
-Vial segmentation accuracy (per-vial confusion metrics; manual segmentation is ground truth):
-
-```bash
-uv run spirit-phantom analyse vials \
-  path/to/manual_segmentation.nii.gz \
-  path/to/registration_output/transformed_component_atlas.nii.gz
-```
-
-Example command (Windows relative paths):
-
-```powershell
-uv run spirit-phantom analyse vials `
-  path\to\manual_segmentation.nii.gz `
-  path\to\registration_output\transformed_component_atlas.nii.gz
-```
-
-Example output (columns and rows truncated for readability):
-
-```text
-vial_id | manual_label | atlas_label | dice_score | fpr      | fnr      | ... | sensitivity | specificity
---------+--------------+-------------+------------+----------+----------+-----+-------------+-------------
-A       | 1            | 17          | 0.953306   | 0.000025 | 0.067404 | ... | 0.932596    | 0.999975
-...
-```
-
-The full table has 22 rows (vials `A..V`).
-
-The `analyse vials` command expects the same inputs as `analyse dice` (see above).
-
-The output table includes:
-
-- `vial_id`, `manual_label`, `atlas_label`, `dice_score`
-- `fpr`, `fnr` — false positive and false negative rates for the vial mask
-- `manual_voxels`, `atlas_voxels`, `intersection_voxels`
-- `tp_voxels`, `fp_voxels`, `fn_voxels`, `tn_voxels` — per-vial confusion counts against the full volume
-- `sensitivity` — fraction of manual vial voxels detected by the atlas (`tp / manual_voxels`)
-- `specificity` — fraction of non-manual voxels correctly not labelled as this vial by the atlas (`tn / (tn + fp)`)
-
-Interpretation notes:
-
-- `fpr` is `fp / (fp + tn)`; `fnr` is `fn / manual_voxels` (equal to `1 - sensitivity`).
-- `intersection_voxels` and `tp_voxels` are identical (voxel overlap between manual and atlas masks).
-- High `specificity` (for example `0.99`) means atlas false positives for that vial are rare outside the manual ROI.
-- A higher `fnr` (for example `0.50`) means half of the manual vial voxels were not captured by the registered atlas mask, even when `dice_score` remains moderate.
-
-If the two images have different shapes, the command exits with a clear validation error.
-
 Atomic ethylene glycol mask generation (single-slice multi-echo GRE):
 
 ```bash
@@ -199,13 +93,22 @@ If `--output-mask-image-path` is omitted, the output defaults to:
 
 `<parent of multiecho_scan>/ethylene_glycol_mask_<timestamp>.nii.gz`
 
-The `eg-mask` workflow now:
+The `eg-mask` workflow:
 
 - Applies binary dilation to the mapped EG segmentation before filtering.
 - Computes `sum(abs(S[n] - S[n-1]))` across the 4th dimension for each candidate voxel.
 - Rejects voxels with summed absolute difference below the configured threshold.
 - Saves a diagnostic plot next to the mask as `<mask_stem>_sad_filter_plot.png` when `--vis` is enabled.
 
+Full command reference: [CLI usage](docs/cli.md).
+
+## Documentation
+
+Narrative guides are ordinary Markdown and can be read on GitHub:
+
+- [CLI usage](docs/cli.md)
+- [Python API usage](docs/python-api.md)
+- [Developer tools](docs/developer-tools.md)
 
 ### Slice Thickness
 
@@ -387,13 +290,11 @@ no save directory is provided.
 
 ## Development
 
-Steps to set up your environment for development on `spirit-phantom`:
-
-- **Clone the repository** from GitHub.
-- **Set up an environment** and install the development dependencies:
+From a clone:
 
 ```bash
 uv sync
+uv run pytest
 uv run mkdocs serve
 ```
 
@@ -401,13 +302,4 @@ Then open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). `uv sync` is require
 
 Hosted documentation (after GitHub Pages is enabled): [https://gold-standard-phantoms.github.io/spirit-phantom/](https://gold-standard-phantoms.github.io/spirit-phantom/)
 
-## Development
-
-From a clone:
-
-```bash
-uv sync
-uv run pytest
-```
-
-See [Developer tools](docs/developer-tools.md) for linting, type checking, Dice scoring, and other QC helpers.
+See [Developer tools](docs/developer-tools.md) for linting, type checking, Dice scoring (`developer dice`), and QC helpers.
