@@ -50,6 +50,16 @@ uv run ruff format
 uv run mypy src
 ```
 
+## Developer CLI
+
+Quality-control commands live under `spirit-phantom developer` (not `analyse`):
+
+```bash
+uv run spirit-phantom developer --help
+uv run spirit-phantom developer dice --help
+uv run spirit-phantom developer vials --help
+```
+
 ## Dice score checker
 
 Compare a manual vial segmentation with the registered component atlas.
@@ -57,9 +67,21 @@ Compare a manual vial segmentation with the registered component atlas.
 CLI:
 
 ```bash
-uv run spirit-phantom analyse dice \
+uv run spirit-phantom developer dice \
   path/to/manual_segmentation.nii.gz \
   path/to/registration_output/transformed_component_atlas.nii.gz
+```
+
+Example output:
+
+```text
+vial_id | manual_label | atlas_label | dice_score | manual_voxels | atlas_voxels | intersection_voxels
+--------+--------------+-------------+------------+---------------+--------------+--------------------
+A       | 1            | 17          | 0.953306   | 71937         | 68809        | 67087
+B       | 2            | 18          | 0.935174   | 72022         | 67798        | 65378
+...
+U       | 21           | 21          | ...        | ...           | ...          | ...
+V       | 22           | 22          | ...        | ...           | ...          | ...
 ```
 
 Python:
@@ -81,12 +103,6 @@ Inputs must share a voxel grid:
 - Registered component atlas (`transformed_component_atlas.nii.gz` from `register`),
   not the signal-only `Bspline_Image.nii.gz`.
 
-Example columns:
-
-```text
-vial_id | manual_label | atlas_label | dice_score | manual_voxels | atlas_voxels | intersection_voxels
-```
-
 The full table has 22 rows (vials `A..V`). Thermometry vials `U` and `V` use
 manual labels and atlas segment indices `21` and `22`.
 
@@ -106,9 +122,18 @@ Same inputs as the Dice checker, with extra confusion metrics. Manual
 segmentation is treated as ground truth.
 
 ```bash
-uv run spirit-phantom analyse vials \
+uv run spirit-phantom developer vials \
   path/to/manual_segmentation.nii.gz \
   path/to/registration_output/transformed_component_atlas.nii.gz
+```
+
+Example output (columns and rows truncated for readability):
+
+```text
+vial_id | manual_label | atlas_label | dice_score | fpr      | fnr      | ... | sensitivity | specificity
+--------+--------------+-------------+------------+----------+----------+-----+-------------+-------------
+A       | 1            | 17          | 0.953306   | 0.000025 | 0.067404 | ... | 0.932596    | 0.999975
+...
 ```
 
 Python equivalent: `generate_vial_segmentation_accuracy_table` and

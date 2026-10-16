@@ -62,6 +62,8 @@ nav:
       - Guarded registration: api/guarded_registration.md
       - Vials: api/vials.md
       - Slice thickness: api/slice_thickness.md
+      - Atlas mask: api/atlas_mask.md
+      - Atlas transfer: api/atlas_transfer.md
       - Multi-echo thermometry: api/multi_echo_thermometry.md
       - Initial transform: api/initial_transform.md
       - Points: api/points.md

@@ -6,13 +6,20 @@ The `spirit-phantom` command is a [Typer](https://typer.tiangolo.com/) applicati
 uv run spirit-phantom --help
 uv run spirit-phantom register --help
 uv run spirit-phantom analyse --help
+uv run spirit-phantom developer --help
 ```
+
+The CLI has three top-level groups:
+
+- `register` — atlas-to-scanner registration
+- `analyse` — product analyses (`vial-measurements`, `map-mask`, `eg-mask`)
+- `developer` — quality-control helpers (`dice`, `vials`); see [Developer tools](developer-tools.md)
 
 The CLI supports both atomic and combined workflows:
 
 - Register once, then run one or more analysis commands.
 - Register and immediately run vial measurements in one command.
-- Run standalone analysis commands such as per-vial Dice scoring, atlas label transfer (`map-mask`), and ethylene glycol mask generation (`eg-mask`).
+- Run standalone analysis commands such as atlas label transfer (`map-mask`) and ethylene glycol mask generation (`eg-mask`).
 
 ## Registration
 
@@ -144,44 +151,6 @@ and analysis goal.
 
 Vial measurement tables list all 22 configured vials (`A..V`), including thermometry vials `U` and `V`.
 
-### `analyse dice`
-
-Per-vial Dice overlap between a manual segmentation and the registered component atlas.
-Use a manual mask drawn on the scanner image and `transformed_component_atlas.nii.gz`
-(not the signal-only `Bspline_Image.nii.gz`).
-
-```bash
-uv run spirit-phantom analyse dice \
-  path/to/manual_segmentation.nii.gz \
-  path/to/registration_output/transformed_component_atlas.nii.gz
-```
-
-The command expects:
-
-- Manual segmentation in scanner (fixed) image space where labels `1..22` represent vials `A..V`.
-- Registered component atlas segmentation on the same voxel grid.
-
-The output table includes `vial_id`, `manual_label`, `atlas_label`, `dice_score`,
-`manual_voxels`, `atlas_voxels`, and `intersection_voxels`.
-
-Thermometry vials `U` and `V` use manual labels and atlas segment indices `21` and `22`.
-If the two images have different shapes, the command exits with a validation error.
-
-See [Developer tools](developer-tools.md) for how to interpret Dice scores.
-
-### `analyse vials`
-
-Same inputs as `analyse dice`. Prints per-vial confusion metrics with the manual
-segmentation as ground truth (false positive/negative rates, sensitivity, specificity).
-
-```bash
-uv run spirit-phantom analyse vials \
-  path/to/manual_segmentation.nii.gz \
-  path/to/registration_output/transformed_component_atlas.nii.gz
-```
-
-See [Developer tools](developer-tools.md) for column meanings.
-
 ### `analyse map-mask`
 
 Map all non-zero atlas labels onto a scan that may sit on a different voxel grid.
@@ -196,7 +165,8 @@ uv run spirit-phantom analyse map-mask \
 
 If `--output-mask-image-path` is omitted, the output defaults to:
 
-`<parent of clinical_scan>/mapped_atlas_mask_<timestamp>.nii.gz`
+`mapped_atlas_mask_<scan_stem>.nii.gz` beside the registered component atlas
+(typically the registration output directory).
 
 Skip this command when the clinical image is already the registration target:
 `register` writes `transformed_component_atlas.nii.gz` on that grid. Use

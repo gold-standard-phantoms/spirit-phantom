@@ -29,8 +29,10 @@ Skip the transfer step when the clinical image is the registration target: `regi
 ## What you can do
 
 - Register a scanner image and measure vials — CLI (`register`, `analyse vial-measurements`)
+- Transfer atlas labels onto another scan grid — CLI (`analyse map-mask`)
 - NEMA slice thickness — Python API only (no CLI yet)
 - Thermometry — in development (ethylene glycol mask helpers exist; no temperature analysis yet)
+- Developer QC helpers — CLI (`developer dice`, `developer vials`); see [Developer tools](developer-tools.md)
 
 ## Guides
 
