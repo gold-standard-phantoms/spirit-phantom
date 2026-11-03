@@ -19,7 +19,7 @@ DEFAULT_REGISTER_MOVING_IMAGE_URL = (
 # Pinned URL for the default SPIRIT signal atlas (moving image for registration).
 
 DEFAULT_REGISTER_MOVING_IMAGE_KNOWN_HASH: str | None = (
-    "sha256:5d0614d32ec6c5b638db9b0f5e3a67d2e34765f5974d5a3568d5d9378e93ded0"
+    "sha256:e4d76407070dd5932317bea4f93f47c9362aad5af05068dfc6f05a8dc4b254a1"
 )
 # Expected SHA-256 for the default SPIRIT atlas.
 # If you need to update the atlas, update both the URL and this hash.
@@ -38,7 +38,7 @@ DEFAULT_COMPONENT_SPIRIT_ATLAS_IMAGE_URL = (
 # Pinned URL for the default SPIRIT component atlas (moving image for ROI extraction).
 
 DEFAULT_COMPONENT_SPIRIT_ATLAS_IMAGE_KNOWN_HASH: str | None = (
-    "sha256:577e92b10e3855a8f93a89514f3eee79e2bc8917d3c6c861dba06c55433eef16"
+    "sha256:3b299c0ecbee0184ddd38e20f871a2152f8caaee1066117945bb708a73b9176f"
 )
 # Expected SHA-256 for the default SPIRIT component atlas.
 # If you need to update the atlas, update both the URL and this hash.
