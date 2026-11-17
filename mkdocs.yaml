@@ -54,6 +54,7 @@ nav:
   - CLI usage: cli.md
   - Python API usage: python-api.md
   - Interpreting outputs: interpreting-outputs.md
+  - Example pulse sequences: example-pulse-sequences.md
   - Developer tools: developer-tools.md
   - API reference:
       - Overview: api/index.md
