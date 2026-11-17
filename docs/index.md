@@ -40,6 +40,7 @@ Skip the transfer step when the clinical image is the registration target: `regi
 - [CLI usage](cli.md)
 - [Python API usage](python-api.md)
 - [Interpreting outputs](interpreting-outputs.md)
+- [Example pulse sequences](example-pulse-sequences.md)
 - [Developer tools](developer-tools.md)
 
 API docstrings are collected under [API reference](api/index.md). Those pages need MkDocs to expand; they are not useful as raw GitHub Markdown.

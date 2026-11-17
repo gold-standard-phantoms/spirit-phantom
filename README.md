@@ -109,6 +109,7 @@ Narrative guides are ordinary Markdown and can be read on GitHub:
 - [CLI usage](docs/cli.md)
 - [Python API usage](docs/python-api.md)
 - [Interpreting outputs](docs/interpreting-outputs.md)
+- [Example pulse sequences](docs/example-pulse-sequences.md)
 - [Developer tools](docs/developer-tools.md)
 
 ### Slice Thickness
