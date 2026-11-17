@@ -125,6 +125,9 @@ uv run spirit-phantom register \
   --generate-checkerboards
 ```
 
+Those checkerboard PNGs are registration quality-control overlays. See
+[Interpreting outputs](interpreting-outputs.md) for how to read them.
+
 In the combined case, detailed vial statistics are saved automatically to:
 
 `path/to/registration_output/vial_statistics_details.txt`

@@ -53,6 +53,7 @@ nav:
   - Home: index.md
   - CLI usage: cli.md
   - Python API usage: python-api.md
+  - Interpreting outputs: interpreting-outputs.md
   - Developer tools: developer-tools.md
   - API reference:
       - Overview: api/index.md

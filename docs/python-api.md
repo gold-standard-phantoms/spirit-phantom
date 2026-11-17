@@ -164,7 +164,8 @@ print(mask_path)
 ## Checkerboard visualisation
 
 After registration, checkerboard images can be generated to inspect alignment
-on selected axial slices:
+on selected axial slices. See [Interpreting outputs](interpreting-outputs.md)
+for how to read a successful registration against a failed one.
 
 ```python
 from pathlib import Path
