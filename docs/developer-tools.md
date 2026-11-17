@@ -153,6 +153,8 @@ The table includes `dice_score`, `fpr`, `fnr`, voxel counts, `tp_voxels` /
 
 After `register`, pass `--generate-checkerboards` to write overlay PNGs on evenly
 spaced axial slices of the fixed image. The CLI prints the saved PNG paths.
+See [Interpreting outputs](interpreting-outputs.md) for what continuous edges
+and stepped boundaries look like.
 
 From Python, `visualise_checkerboard` in `spirit_phantom.utils.visualisation`
 takes explicit slice indices and returns a list of output PNG paths.

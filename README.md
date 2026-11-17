@@ -108,6 +108,7 @@ Narrative guides are ordinary Markdown and can be read on GitHub:
 
 - [CLI usage](docs/cli.md)
 - [Python API usage](docs/python-api.md)
+- [Interpreting outputs](docs/interpreting-outputs.md)
 - [Developer tools](docs/developer-tools.md)
 
 ### Slice Thickness
@@ -262,7 +263,8 @@ An example of the output is with `erosion_voxels=1`:
 ### Checkerboard visualisation
 
 After registration, checkerboard images can be generated to visually inspect the
-alignment between the fixed and registered images on selected axial slices:
+alignment between the fixed and registered images on selected axial slices.
+How to read them: [Interpreting outputs](docs/interpreting-outputs.md).
 
 ```
 from pathlib import Path
