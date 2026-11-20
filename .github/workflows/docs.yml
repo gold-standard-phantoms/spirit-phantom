@@ -1,54 +1,39 @@
-name: Deploy docs
+# Publishes the documentation to two places, each built separately because site_url differs
+# (mkdocs.yaml reads it from SITE_URL):
+#   docs   the GSP documentation server, http://docs.internal/spirit-phantom/
+#          main publishes "dev"; a tag vX.Y.Z publishes "X.Y.Z" and moves "latest"
+#   pages  GitHub Pages, https://gold-standard-phantoms.github.io/spirit-phantom/
+#          main only
+
+name: Documentation
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build MkDocs site
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  docs:
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    uses: gold-standard-phantoms/github-actions/.github/workflows/deploy-docs.yml@v0.6.0
+    with:
+      project: spirit-phantom
+      python_version: "3.11"
+      use_private_pypi: false
+    secrets:
+      GSP_DOCS_KEY: ${{ secrets.GSP_DOCS_KEY }}
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Install dependencies
-        run: uv sync --group dev
-
-      - name: Build documentation
-        run: uv run mkdocs build --strict
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-  deploy:
-    name: Deploy GitHub Pages
+  pages:
     if: github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+    uses: gold-standard-phantoms/github-actions/.github/workflows/deploy-pages.yml@v0.6.0
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    with:
+      python_version: "3.11"
+      use_private_pypi: false

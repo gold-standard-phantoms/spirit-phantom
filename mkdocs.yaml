@@ -1,6 +1,9 @@
 site_name: GSP Spirit phantom tools
 site_description: Tools for analysing Gold Standard Phantoms SPIRIT phantom data
-site_url: https://gold-standard-phantoms.github.io/spirit-phantom/
+# Two hosts: the GSP documentation server (the default, also for `mkdocs serve`) and GitHub
+# Pages, whose workflow sets SITE_URL. Canonical links, sitemap.xml and the 404 page are
+# built from it.
+site_url: !ENV [SITE_URL, "http://docs.internal/spirit-phantom/"]
 repo_url: https://github.com/gold-standard-phantoms/spirit-phantom
 repo_name: gold-standard-phantoms/spirit-phantom
 
@@ -80,3 +83,9 @@ extra_javascript:
 
 extra_css:
   - https://unpkg.com/katex@0/dist/katex.min.css
+
+# The documentation server writes versions.json; the selector is absent on GitHub Pages.
+extra:
+  version:
+    provider: mike
+    default: latest
