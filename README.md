@@ -303,6 +303,6 @@ uv run mkdocs serve
 
 Then open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). `uv sync` is required because MkDocs is a development dependency; `uv pip install` from git does not include it.
 
-Hosted documentation (after GitHub Pages is enabled): [https://gold-standard-phantoms.github.io/spirit-phantom/](https://gold-standard-phantoms.github.io/spirit-phantom/)
+Hosted documentation: [https://gold-standard-phantoms.github.io/spirit-phantom/](https://gold-standard-phantoms.github.io/spirit-phantom/) (public). On the office network or VPN, with a GSP sign-in: [http://docs.internal/spirit-phantom/](http://docs.internal/spirit-phantom/).
 
 See [Developer tools](docs/developer-tools.md) for linting, type checking, Dice scoring (`developer dice`), and QC helpers.
