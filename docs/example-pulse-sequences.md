@@ -37,22 +37,23 @@ Typical workflow:
 ## Ethylene glycol thermometry
 
 Thermometry uses a multi-echo gradient-echo (multi-GRE) acquisition through the
-ethylene glycol vials. The principle is based on the fact that this compound has
-two visible NMR peaks: one hydroxyl peak and one methylene peak. The frequency
-difference between these two peaks is given by the equation:
+ethylene glycol vials. Ethylene glycol has two chemical species, the CH₂ and OH
+groups, which produce a beat pattern in the multi-echo magnitude signal. The
+frequency difference between those peaks is related to temperature by:
 
 $$
-y = 4.5677 - 0.0097723x
+T[^{\circ}\mathrm{C}] = 193.35 - 1.02 \times 10^{8} \cdot \frac{|\Delta f_{12}|}{\gamma B_0}
 $$
 
-with y = chemical shift difference (in ppm) and x = temperature (in K). For a
-typical room temperature of 20C, it gives a difference of y = 1.7ppm, which
-corresponds to ~108.5 Hz at 1.5T and 217Hz at 3.0T. This will result in a beat
-frequency of in-phase and out-of-phase signals which need to be properly
-sampled. Our own experience to obtain a proper fit is to have a sampling
-frequency close to 1 kHz. Thus, if the minimum inter-echo spacing is ~2ms, one
-can achieve such a high sampling frequency by shifting two acquisitions by half
-the minimum inter-echo spacing (see below).
+where $T$ is the temperature in °C, $|\Delta f_{12}|$ is the frequency difference
+between the two peaks in Hz, $\gamma$ is the ¹H gyromagnetic ratio in Hz/T, and
+$B_0$ is the main field strength in tesla. At about 20°C that difference is about
+108.5 Hz at 1.5 T and 217 Hz at 3.0 T. This will result in a beat frequency of
+in-phase and out-of-phase signals which need to be properly sampled. Our own
+experience to obtain a proper fit is to have a sampling frequency close to
+1 kHz. Thus, if the minimum inter-echo spacing is ~2 ms, one can achieve such a
+high sampling frequency by shifting two acquisitions by half the minimum
+inter-echo spacing (see below).
 
 | Parameter | Guidance |
 | --- | --- |
