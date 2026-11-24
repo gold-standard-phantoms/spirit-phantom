@@ -329,12 +329,14 @@ def _invert_points_with_elastix(
     fixed_image_path: Path,
     moving_image_path: Path,
     output_directory: Path,
+    inverse_transform_path: Path | None = None,
 ) -> list[list[float]]:
     """Map moving-domain points to fixed space via an elastix-estimated inverse.
 
-    Estimates ``T⁻¹`` with :func:`compute_inverse_transform`, applies it with
-    transformix, then pushes the result back through ``T`` to report the
-    round-trip residual.
+    When ``inverse_transform_path`` is omitted, estimates ``T⁻¹`` with
+    :func:`compute_inverse_transform` under ``output_directory``. Prefer
+    :func:`~spirit_phantom.core.registration.ensure_inverse_transform` so
+    analyses share one inverse in the registration directory.
 
     Args:
         targets: NIfTI/nibabel world-coordinate points in the moving domain.
@@ -342,19 +344,25 @@ def _invert_points_with_elastix(
         fixed_image_path: Fixed image of the forward registration.
         moving_image_path: Moving image path used by transformix for geometry
             of the round-trip check.
-        output_directory: Directory for the inverse transform and point I/O.
+        output_directory: Directory for point I/O (and a local inverse when
+            ``inverse_transform_path`` is omitted).
+        inverse_transform_path: Optional precomputed inverse transform head.
 
     Returns:
         Fixed-domain NIfTI/nibabel world-coordinate points.
     """
-    inverse_transform_path = compute_inverse_transform(
-        transform_parameter_path=transform_parameter_path,
-        fixed_image_path=fixed_image_path,
-        output_directory=output_directory / "inverse_transform",
+    resolved_inverse = (
+        inverse_transform_path
+        if inverse_transform_path is not None
+        else compute_inverse_transform(
+            transform_parameter_path=transform_parameter_path,
+            fixed_image_path=fixed_image_path,
+            output_directory=output_directory / "inverse_transform",
+        )
     )
     fixed_points = transform_points_with_transformix(
         points=targets,
-        transform_parameter_path=inverse_transform_path,
+        transform_parameter_path=resolved_inverse,
         moving_image_path=fixed_image_path,
         output_directory=output_directory / "inverse_points",
     )
@@ -435,7 +443,7 @@ def _invert_points_with_picard_iteration(
     raise RuntimeError(msg)
 
 
-def invert_points_through_transformix(
+def invert_points_through_transformix(  # noqa: PLR0913
     *,
     moving_points: _Points,
     transform_parameter_path: Path,
@@ -443,6 +451,7 @@ def invert_points_through_transformix(
     moving_image_path: Path,
     output_directory: Path,
     method: InversionMethod = InversionMethod.ELASTIX,
+    inverse_transform_path: Path | None = None,
     max_iterations: int = 10,
     tolerance_mm: float = 1e-4,
 ) -> list[list[float]]:
@@ -451,7 +460,9 @@ def invert_points_through_transformix(
     Useful for atlas landmarks that should land in scan (fixed) space after
     registration. By default the inverse is estimated with elastix
     (``DisplacementMagnitudePenalty``); see :class:`InversionMethod` for the
-    alternatives. The result is also written to ``fixed_space_points.txt``.
+    alternatives. Pass ``inverse_transform_path`` from
+    :func:`~spirit_phantom.core.registration.ensure_inverse_transform` to reuse
+    a shared inverse. The result is also written to ``fixed_space_points.txt``.
 
     Args:
         moving_points: NIfTI/nibabel world-coordinate points in the
@@ -462,6 +473,9 @@ def invert_points_through_transformix(
         moving_image_path: Moving image path used by transformix for geometry.
         output_directory: Directory for intermediate transformix outputs.
         method: Inversion method.
+        inverse_transform_path: Optional precomputed inverse transform head
+            (elastix method only). When omitted, a local inverse is estimated
+            under ``output_directory``.
         max_iterations: Maximum fixed-point iterations (Picard only).
         tolerance_mm: Stop when max absolute residual in millimetres is below
             this threshold (Picard only).
@@ -496,6 +510,7 @@ def invert_points_through_transformix(
             fixed_image_path=fixed_image_path,
             moving_image_path=moving_image_path,
             output_directory=output_directory,
+            inverse_transform_path=inverse_transform_path,
         )
 
     save_points(

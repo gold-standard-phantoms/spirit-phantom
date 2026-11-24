@@ -24,6 +24,7 @@ from spirit_phantom.core.generate_slice_mask import (
     save_world_points_mask,
     wedge_roi_corners,
 )
+from spirit_phantom.core.registration import ensure_inverse_transform
 from spirit_phantom.core.slice_thickness import (
     calculate_slice_profile,
     nema_slice_thickness,
@@ -543,6 +544,7 @@ def map_wedge_corners_to_fixed_space(
     fixed_image_path: Path,
     moving_image_path: Path,
     output_directory: Path,
+    inverse_transform_path: Path | None = None,
     inversion_method: InversionMethod = InversionMethod.ELASTIX,
 ) -> MappedWedgeCorners:
     """Map atlas wedge corners into fixed space by inverting transformix ``T``.
@@ -554,6 +556,8 @@ def map_wedge_corners_to_fixed_space(
             the domain of the elastix-estimated inverse.
         moving_image_path: Moving image used by transformix for geometry.
         output_directory: Directory for transformix point I/O.
+        inverse_transform_path: Optional shared inverse from
+            :func:`~spirit_phantom.core.registration.ensure_inverse_transform`.
         inversion_method: Method used to invert the forward transform.
 
     Returns:
@@ -574,6 +578,7 @@ def map_wedge_corners_to_fixed_space(
         moving_image_path=moving_image_path,
         output_directory=output_directory / "moving_to_fixed",
         method=inversion_method,
+        inverse_transform_path=inverse_transform_path,
     )
 
     by_label: dict[int, list[list[float]]] = {}
@@ -599,6 +604,8 @@ def measure_slice_thickness_from_fixed_wedges(  # noqa: PLR0913
     transform_parameter_path: Path,
     moving_image_path: Path,
     output_directory: Path,
+    registration_directory: Path | None = None,
+    inverse_transform_path: Path | None = None,
     atlas_image_path: Path | None = None,
     ramp_slope_degrees: float = 15.0,
     n_lines: int = _DEFAULT_PROFILE_LINES,
@@ -626,6 +633,12 @@ def measure_slice_thickness_from_fixed_wedges(  # noqa: PLR0913
         transform_parameter_path: Final elastix transform parameter file.
         moving_image_path: Moving image path for transformix geometry.
         output_directory: Directory for intermediate point files and QC masks.
+        registration_directory: Registration output directory used to locate or
+            create the shared ``Inverse_BSpline_Transform.txt``. When omitted,
+            ``transform_parameter_path.parent`` is used.
+        inverse_transform_path: Optional precomputed inverse. When omitted,
+            :func:`~spirit_phantom.core.registration.ensure_inverse_transform`
+            is called.
         atlas_image_path: Optional atlas/moving NIfTI used to save the
             world-space wedge ROI mask for visual QC. When omitted,
             ``moving_image_path`` is used.
@@ -647,11 +660,25 @@ def measure_slice_thickness_from_fixed_wedges(  # noqa: PLR0913
         started_at = print_cli_stage(
             stage=1, total=_ANALYSIS_STAGE_COUNT, label=stage_label, enabled=cli_user
         )
+        resolved_inverse = (
+            inverse_transform_path
+            if inverse_transform_path is not None
+            else ensure_inverse_transform(
+                registration_directory=(
+                    registration_directory
+                    if registration_directory is not None
+                    else transform_parameter_path.parent
+                ),
+                fixed_image_path=fixed_image_path,
+                forward_transform_path=transform_parameter_path,
+            )
+        )
         mapped = map_wedge_corners_to_fixed_space(
             transform_parameter_path=transform_parameter_path,
             fixed_image_path=fixed_image_path,
             moving_image_path=moving_image_path,
             output_directory=output_directory,
+            inverse_transform_path=resolved_inverse,
         )
         print_cli_stage_done(
             stage=1,

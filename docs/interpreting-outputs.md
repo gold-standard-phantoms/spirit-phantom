@@ -34,7 +34,7 @@ Generate these overlays from the CLI with `--generate-checkerboards`, or from Py
 
 `register --analyse slice-thickness` and `analyse slice-thickness` measure slice thickness with the wedge method of [NEMA MS 5-2018](https://www.nema.org/Standards/view/Determination-of-Slice-Thickness-in-Diagnostic-Magnetic-Resonance-Imaging) (Section 2.2). The SPIRIT phantom has two wedges inclined at α = 15° to the slice plane. For each wedge the analysis:
 
-1. Maps the wedge ROI corners from the atlas into scan space with an elastix-estimated inverse of the registration transform.
+1. Maps the wedge ROI corners from the atlas into scan space with the shared elastix-estimated inverse of the registration transform (`Inverse_BSpline_Transform.txt` in the registration directory).
 2. Samples edge-response functions (ERFs) along the wedge's long axis on several parallel lines.
 3. Differentiates each ERF to give the projected slice profile and averages the lines.
 4. Measures the full width at half maximum (FWHM) of the mean profile and multiplies it by tan α to give the slice thickness.
@@ -68,7 +68,7 @@ Files are written to the slice-thickness output directory (by default `<registra
 | `slice_wedge_mask_atlas.nii.gz`, `slice_wedge_corners_atlas.nii.gz` | The same ROIs and corners in atlas space, for comparison. |
 | `wedge_corners_fixed_mm.txt` | Scan-space corner coordinates in millimetres, in processing order. |
 | `slice_thickness.log` | Diagnostics: inverse-transform round-trip residual, half-maximum crossings and slice profiles. |
-| `moving_to_fixed/` | Inverse transform and transformix point files used to map the corners. |
+| `moving_to_fixed/` | Transformix point files and round-trip check for the corner mapping. The shared inverse lives in the registration directory as `Inverse_BSpline_Transform.txt`. |
 
 ### Reading the profile plot
 

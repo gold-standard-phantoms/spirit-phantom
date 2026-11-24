@@ -572,6 +572,70 @@ def compute_inverse_transform(
     return bspline_transform_path
 
 
+def ensure_inverse_transform(
+    *,
+    registration_directory: Path,
+    fixed_image_path: Path,
+    forward_transform_path: Path | None = None,
+    force: bool = False,
+    parameter_set: ParameterSet = ParameterSet.REGULAR,
+) -> Path:
+    """Return the shared inverse transform for a registration directory.
+
+    Looks for ``Inverse_BSpline_Transform.txt`` (and its chained inverse
+    affine) under ``registration_directory``. When missing, estimates the
+    inverse of the forward B-spline chain once and writes it beside the
+    forward transforms so slice-thickness, distortion and other analyses can
+    reuse it.
+
+    Args:
+        registration_directory: ``register`` output directory containing
+            ``BSpline_Transform.txt`` (or ``forward_transform_path``).
+        fixed_image_path: Scanner (fixed) image used as the registration
+            target; defines the inverse's domain.
+        forward_transform_path: Optional override for the forward transform
+            head. Defaults to ``BSpline_Transform.txt`` in the registration
+            directory.
+        force: When True, recompute even if an inverse already exists.
+        parameter_set: Elastix parameter set (regular).
+
+    Returns:
+        Path to ``Inverse_BSpline_Transform.txt``.
+
+    Raises:
+        FileNotFoundError: If the forward transform is missing when a new
+            inverse must be computed.
+    """
+    inverse_bspline_path = registration_directory / INVERSE_BSPLINE_TRANSFORM_FILENAME
+    inverse_affine_path = registration_directory / INVERSE_AFFINE_TRANSFORM_FILENAME
+    if not force and inverse_bspline_path.is_file() and inverse_affine_path.is_file():
+        logger.info("Reusing inverse transform: %s", inverse_bspline_path)
+        return inverse_bspline_path
+
+    resolved_forward = (
+        forward_transform_path
+        if forward_transform_path is not None
+        else registration_directory / BSPLINE_TRANSFORM_FILENAME
+    )
+    if not resolved_forward.is_file():
+        msg = (
+            f"Forward transform file not found: {resolved_forward}. "
+            "Run `spirit-phantom register` first."
+        )
+        raise FileNotFoundError(msg)
+
+    logger.info(
+        "Computing inverse transform into registration directory: %s",
+        registration_directory,
+    )
+    return compute_inverse_transform(
+        transform_parameter_path=resolved_forward,
+        fixed_image_path=fixed_image_path,
+        output_directory=registration_directory,
+        parameter_set=parameter_set,
+    )
+
+
 def _register(
     fixed_image: itk.Image,
     moving_image: itk.Image,
