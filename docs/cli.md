@@ -12,13 +12,13 @@ uv run spirit-phantom developer --help
 The CLI has three top-level groups:
 
 - `register` — atlas-to-scanner registration
-- `analyse` — product analyses (`vial-measurements`, `map-mask`, `eg-mask`)
+- `analyse` — product analyses (`vial-measurements`, `slice-thickness`, `map-mask`, `eg-mask`)
 - `developer` — quality-control helpers (`dice`, `vials`); see [Developer tools](developer-tools.md)
 
 The CLI supports both atomic and combined workflows:
 
 - Register once, then run one or more analysis commands.
-- Register and immediately run vial measurements in one command.
+- Register and immediately run vial measurements or slice thickness in one command.
 - Run standalone analysis commands such as atlas label transfer (`map-mask`) and ethylene glycol mask generation (`eg-mask`).
 
 ## Registration
@@ -144,7 +144,8 @@ uv run spirit-phantom register \
 
 Slice-thickness outputs are written to
 `path/to/registration_output/slice_thickness/`. `--ramp-slope-degrees` and
-`--discard-edge-lines` behave as in `analyse slice-thickness` below.
+`--discard-edge-lines` behave as in `analyse slice-thickness` below, and only
+take effect with `--analyse slice-thickness`.
 
 Other analyses are standalone `analyse` subcommands.
 
@@ -232,5 +233,33 @@ uv run spirit-phantom analyse slice-thickness \
 Pass the moving (atlas) image as a third argument if registration used a
 non-default atlas. Outputs default to
 `path/to/registration_output/slice_thickness/` (override with
-`--output-directory`) and include the wedge ROI and corner QC NIfTIs, per-wedge
-profile CSVs and plots, and `slice_thickness_summary.csv`.
+`--output-directory`).
+
+Options:
+
+- `--ramp-slope-degrees`: wedge angle α (15° for SPIRIT).
+- `--discard-edge-lines`: profile lines dropped from each side of a wedge
+  before averaging, to reduce partial-volume contamination (default 1; 0 keeps
+  all five lines).
+
+The terminal shows numbered stage progress and a per-wedge thickness table:
+
+```text
+[1/3] Inverse registration...
+[1/3] Inverse registration done (36.0s)
+[2/3] Saving wedge QC masks...
+[2/3] Saving wedge QC masks done (11.8s)
+[3/3] Measuring slice thickness...
+[3/3] Measuring slice thickness done (1.4s)
+wedge_label | thickness_mm | pixel_size_mm | n_lines | n_samples
+1 | 1.3377 | 0.9984 | 3 | 51
+2 | 1.3381 | 0.9988 | 3 | 51
+Slice-thickness outputs: path/to/registration_output/slice_thickness
+```
+
+The output directory holds `slice_thickness_summary.csv`, per-wedge profile
+CSVs and plots, wedge ROI and corner QC NIfTIs, and `slice_thickness.log` with
+detailed diagnostics (inverse-transform residual, half-maximum crossings,
+slice profiles). See
+[Interpreting outputs](interpreting-outputs.md#slice-thickness) for what each
+file shows and the checks to make before trusting the result.
