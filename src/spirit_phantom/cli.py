@@ -7,7 +7,7 @@ Top-level command groups:
 
 - ``register`` for atlas-to-scanner registration.
 - ``analyse`` for product analyses (vial measurements, map-mask,
-  eg-thermometry, slice-thickness).
+  eg-thermometry, slice-thickness, distortion).
 - ``developer`` for quality-control helpers (dice, vials).
 """
 
@@ -48,6 +48,7 @@ _EG_THERMOMETRY_OUTPUT_DIRECTORY_NAME = "eg_thermometry"
 _SLICE_THICKNESS_RAMP_SLOPE_DEGREES_DEFAULT = 15.0
 _SLICE_THICKNESS_DISCARD_EDGE_LINES_DEFAULT = 1
 _SLICE_THICKNESS_OUTPUT_SUBDIRECTORY = "slice_thickness"
+_DISTORTION_OUTPUT_SUBDIRECTORY = "distortion"
 
 
 class AnalysisMethod(StrEnum):
@@ -55,6 +56,7 @@ class AnalysisMethod(StrEnum):
 
     VIAL_MEASUREMENTS = "vial-measurements"
     SLICE_THICKNESS = "slice-thickness"
+    DISTORTION = "distortion"
 
 
 class ThermometryMethod(StrEnum):
@@ -339,6 +341,85 @@ def _run_slice_thickness(
     print(f"Slice-thickness outputs: {output_directory.resolve()}")
 
 
+def _run_distortion(
+    *,
+    fixed_image_path: Path,
+    moving_image_path: Path,
+    registration_directory: Path,
+    output_directory: Path,
+    quiet: bool,
+) -> None:
+    """Estimate scanner distortion at SPIRIT fiducials and print a summary.
+
+    Args:
+        fixed_image_path: Scanner (fixed) image used as the registration target.
+        moving_image_path: Atlas (moving) image used for registration.
+        registration_directory: Registration output directory containing the
+            rigid, affine and B-spline transform files.
+        output_directory: Directory for point files, CSVs and QC masks.
+        quiet: Suppress progress messages.
+
+    Raises:
+        typer.BadParameter: If a required registration transform is missing.
+        typer.Exit: If the analysis fails.
+    """
+    from spirit_phantom.core.registration_constants import (  # noqa: PLC0415
+        AFFINE_TRANSFORM_FILENAME,
+        BSPLINE_IMAGE_FILENAME,
+        BSPLINE_TRANSFORM_FILENAME,
+        RIGID_TRANSFORM_FILENAME,
+    )
+
+    for filename in (
+        RIGID_TRANSFORM_FILENAME,
+        AFFINE_TRANSFORM_FILENAME,
+        BSPLINE_TRANSFORM_FILENAME,
+    ):
+        transform_path = registration_directory / filename
+        if not transform_path.is_file():
+            msg = (
+                f"Transform file not found: {transform_path}. "
+                "Run `spirit-phantom register` first."
+            )
+            raise typer.BadParameter(msg)
+
+    moving_geometry_path = registration_directory / BSPLINE_IMAGE_FILENAME
+    if not moving_geometry_path.is_file():
+        moving_geometry_path = moving_image_path
+
+    from spirit_phantom.core.distortion import (  # noqa: PLC0415
+        evaluate_scanner_distortion,
+    )
+
+    try:
+        result = evaluate_scanner_distortion(
+            registration_directory=registration_directory,
+            fixed_image_path=fixed_image_path,
+            moving_image_path=moving_geometry_path,
+            output_directory=output_directory,
+            cli_user=not quiet,
+        )
+    except (FileNotFoundError, RuntimeError, ValueError) as error:
+        typer.secho(
+            f"Distortion analysis failed: {error}",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1) from error
+
+    summary = result.summary
+    print(
+        "n_fiducials | mean_magnitude_mm | max_magnitude_mm | "
+        "rms_magnitude_mm | max_nonrigid_roundtrip_residual_mm"
+    )
+    print(
+        f"{summary.n_fiducials} | {summary.mean_magnitude_mm:.4f} | "
+        f"{summary.max_magnitude_mm:.4f} | {summary.rms_magnitude_mm:.4f} | "
+        f"{summary.max_nonrigid_roundtrip_residual_mm:.4f}"
+    )
+    print(f"Distortion outputs: {output_directory.resolve()}")
+
+
 def _build_checkerboard_slice_indices(*, fixed_image_path: Path) -> list[int]:
     """Build evenly distributed axial slice indices for checkerboard output.
 
@@ -485,7 +566,7 @@ def _run_vial_segmentation_accuracy_analysis(
 
 
 @app.command()
-def register(  # noqa: PLR0913, C901
+def register(  # noqa: PLR0913, PLR0912, C901
     fixed_image: Annotated[
         Path,
         typer.Argument(help="Path to the fixed (scanner) image."),
@@ -693,6 +774,15 @@ def register(  # noqa: PLR0913, C901
             / _SLICE_THICKNESS_OUTPUT_SUBDIRECTORY,
             ramp_slope_degrees=ramp_slope_degrees,
             discard_edge_lines=discard_edge_lines,
+            quiet=quiet,
+        )
+    elif analyse == AnalysisMethod.DISTORTION:
+        _emit_cli_message("Running analysis: distortion", quiet=quiet)
+        _run_distortion(
+            fixed_image_path=fixed_image,
+            moving_image_path=resolved_moving_image,
+            registration_directory=resolved_output_directory,
+            output_directory=resolved_output_directory / _DISTORTION_OUTPUT_SUBDIRECTORY,
             quiet=quiet,
         )
 
@@ -1059,6 +1149,89 @@ def analyse_slice_thickness(
         ),
         ramp_slope_degrees=ramp_slope_degrees,
         discard_edge_lines=discard_edge_lines,
+        quiet=quiet,
+    )
+
+
+@analyse_app.command("distortion")
+def analyse_distortion(
+    registration_directory: Annotated[
+        Path,
+        typer.Argument(
+            help=(
+                "Registration output directory from `register` "
+                "(must contain Rigid/Affine/BSpline_Transform.txt)."
+            ),
+        ),
+    ],
+    fixed_image: Annotated[
+        Path,
+        typer.Argument(help="Scanner (fixed) image used as the registration target."),
+    ],
+    moving_image: Annotated[
+        Path | None,
+        typer.Argument(
+            help=(
+                "Atlas (moving) image used for registration. If omitted, the "
+                "default SPIRIT atlas is downloaded and cached with pooch."
+            )
+        ),
+    ] = None,
+    *,
+    output_directory: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-directory",
+            "-o",
+            help=(
+                "Directory for point files, CSVs and QC masks. "
+                "Defaults to <registration_directory>/distortion."
+            ),
+        ),
+    ] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress progress messages."),
+    ] = False,
+) -> None:
+    """Estimate scanner geometric distortion from affine + B-spline residuals.
+
+    Maps packaged SPIRIT fiducials into scan space with the inverse of the full
+    registration transform, then reports the displacement induced by the affine
+    and B-spline stages after excluding rigid pose. To register and analyse in
+    one step, use ``register --analyse distortion``.
+
+    Args:
+        registration_directory: Existing registration output directory.
+        fixed_image: Scanner (fixed) image used as the registration target.
+        moving_image: Atlas (moving) image used for registration.
+        output_directory: Output directory for analysis artefacts.
+        quiet: Suppress progress messages.
+    """
+    if not registration_directory.is_dir():
+        msg = f"Registration directory not found: {registration_directory}"
+        raise typer.BadParameter(msg)
+    if not fixed_image.exists():
+        msg = f"Fixed image file not found: {fixed_image}"
+        raise typer.BadParameter(msg)
+    if moving_image is not None and not moving_image.exists():
+        msg = f"Moving image file not found: {moving_image}"
+        raise typer.BadParameter(msg)
+
+    resolved_moving_image = (
+        moving_image
+        if moving_image is not None
+        else _resolve_default_atlases(quiet=quiet)
+    )
+    _run_distortion(
+        fixed_image_path=fixed_image,
+        moving_image_path=resolved_moving_image,
+        registration_directory=registration_directory,
+        output_directory=(
+            output_directory
+            if output_directory is not None
+            else registration_directory / _DISTORTION_OUTPUT_SUBDIRECTORY
+        ),
         quiet=quiet,
     )
 

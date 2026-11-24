@@ -277,3 +277,26 @@ Load and save point sets in elastix/transformix text format with
 with transformix. Pass `method=InversionMethod.PICARD` to use per-point
 fixed-point iteration instead; this only converges for small rotations and
 fails for inverted-phantom registrations.
+
+## Scanner distortion
+
+After registration, estimate geometric distortion at the packaged SPIRIT
+fiducials from the affine and B-spline stages (rigid excluded). See
+[Scanner distortion](scanner-distortion.md) for the method and open doubts.
+
+```python
+from pathlib import Path
+
+from spirit_phantom.core.distortion import evaluate_scanner_distortion
+from spirit_phantom.core.fiducials import load_spirit_fiducials
+
+fiducials = load_spirit_fiducials()
+assert len(fiducials) == 34
+
+result = evaluate_scanner_distortion(
+    registration_directory=Path("registration_output"),
+    fixed_image_path=Path("scanner_image.nii.gz"),
+    output_directory=Path("registration_output/distortion"),
+)
+print(result.summary.mean_magnitude_mm, result.summary.max_magnitude_mm)
+```

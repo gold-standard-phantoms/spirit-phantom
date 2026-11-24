@@ -54,6 +54,7 @@ package-data = { "spirit_phantom" = [
   "core/configuration/parameters_Inverse_Affine.txt",
   "core/configuration/parameters_Inverse_B_Spline.txt",
   "core/configuration/vial-configurations.json",
+  "core/configuration/fiducials.json",
 ] }
 package-dir = { "" = "src" }
 include-package-data = true

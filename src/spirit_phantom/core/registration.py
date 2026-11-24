@@ -242,38 +242,29 @@ def _load_parameter_object(*, filename: str) -> itk.ParameterObject:
     return parameter_object
 
 
-def _save_transform_to_file(
+def save_transform_parameter_file(
+    *,
     transform_params: itk.ParameterObject,
     filename: Path,
     initial_transform_file: Path | None = None,
-    *,
     parameter_map_index: int = 0,
 ) -> Path:
-    """Save transform parameters to a file, optionally with reference to initial transform.
+    """Save transform parameters to a file, optionally chaining an initial transform.
 
-    The `initial_transform_file` parameter allows the transform to reference a
-    previously run transform, enabling chaining of transforms. When provided,
-    the transform will be saved with an `InitialTransformParameterFileName`
-    parameter that points to the previous transform file.
-
-    This saved reference is used by transformix (not during registration) when
-    applying the transform. Transformix will recursively resolve the transform
-    chain by following the `InitialTransformParameterFileName` references.
-    For this to work correctly, all transform files referenced in the chain must
-    be available to transformix at the specified file paths when the transform
-    is applied.
+    When ``initial_transform_file`` is provided, the written file sets
+    ``InitialTransformParameterFileName`` to that path so transformix resolves
+    the chained transform recursively. When ``None``, it writes
+    ``NoInitialTransform`` so the transform is saved as standalone.
 
     Args:
-        transform_params: The transform parameters to save.
-        filename: The path to save the transform parameters to.
-        initial_transform_file: Optional path to a previously run transform file.
-            When provided, this transform will reference it to enable transform
-            chaining. If None, the transform will be saved as standalone.
+        transform_params: Elastix transform parameter object to write.
+        filename: Destination path for the parameter file.
+        initial_transform_file: Optional initial transform file to chain.
         parameter_map_index: Index of the parameter map in ``transform_params``
             to save (for multi-stage elastix results).
 
     Returns:
-        The path to the saved transform parameters file.
+        The path to the saved transform parameter file.
     """
     transform_map = dict(transform_params.GetParameterMap(parameter_map_index))
 
@@ -284,11 +275,39 @@ def _save_transform_to_file(
     else:
         transform_map["InitialTransformParameterFileName"] = ("NoInitialTransform",)
 
+    filename.parent.mkdir(parents=True, exist_ok=True)
     param_obj = itk.ParameterObject.New()
     param_obj.AddParameterMap(transform_map)
     param_obj.WriteParameterFile(str(filename))
 
     return filename
+
+
+def _save_transform_to_file(
+    transform_params: itk.ParameterObject,
+    filename: Path,
+    initial_transform_file: Path | None = None,
+    *,
+    parameter_map_index: int = 0,
+) -> Path:
+    """Save transform parameters to a file, optionally with reference to initial transform.
+
+    Args:
+        transform_params: The transform parameters to save.
+        filename: The path to save the transform parameters to.
+        initial_transform_file: Optional path to a previously run transform file.
+        parameter_map_index: Index of the parameter map in ``transform_params``
+            to save (for multi-stage elastix results).
+
+    Returns:
+        The path to the saved transform parameters file.
+    """
+    return save_transform_parameter_file(
+        transform_params=transform_params,
+        filename=filename,
+        initial_transform_file=initial_transform_file,
+        parameter_map_index=parameter_map_index,
+    )
 
 
 def _perform_rigid_registration(

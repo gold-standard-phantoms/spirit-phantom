@@ -1,0 +1,423 @@
+{
+  "phantom": {
+    "name": "SPIRIT",
+    "part_number": "A-3011-0003",
+    "issue": "1.0"
+  },
+  "fiducial_geometry": {
+    "shape": "sphere",
+    "diameter_mm": 8.0,
+    "grid_spacing_mm": 34.0
+  },
+  "coordinate_frame": "atlas_mm (NIfTI world mm of the published SPIRIT atlas, origin at phantom centre)",
+  "fiducials": [
+    {
+      "id": "F01",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "C-5-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        0.0,
+        68.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F02",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "B-4-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        -34.0,
+        34.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F03",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "C-4-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        0.0,
+        34.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F04",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "D-4-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        34.0,
+        34.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F05",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "A-3-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        -68.0,
+        0.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F06",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "B-3-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        -34.0,
+        0.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F07",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "D-3-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        34.0,
+        0.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F08",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "E-3-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        68.0,
+        0.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F09",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "B-2-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        -34.0,
+        -34.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F10",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "C-2-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        0.0,
+        -34.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F11",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "D-2-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        34.0,
+        -34.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F12",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "C-1-t",
+      "component_label": 23,
+      "layer": "inner",
+      "atlas_mm": [
+        0.0,
+        -68.0,
+        -34.0
+      ]
+    },
+    {
+      "id": "F13",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "C-4-s",
+      "component_label": 23,
+      "layer": "outer",
+      "atlas_mm": [
+        0.0,
+        34.0,
+        -68.0
+      ]
+    },
+    {
+      "id": "F14",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "B-3-s",
+      "component_label": 23,
+      "layer": "outer",
+      "atlas_mm": [
+        -34.0,
+        0.0,
+        -68.0
+      ]
+    },
+    {
+      "id": "F15",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "C-3-s",
+      "component_label": 23,
+      "layer": "outer",
+      "atlas_mm": [
+        0.0,
+        0.0,
+        -68.0
+      ]
+    },
+    {
+      "id": "F16",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "D-3-s",
+      "component_label": 23,
+      "layer": "outer",
+      "atlas_mm": [
+        34.0,
+        0.0,
+        -68.0
+      ]
+    },
+    {
+      "id": "F17",
+      "part": "lower_fiducial_grid",
+      "confluence_address": "C-2-s",
+      "component_label": 23,
+      "layer": "outer",
+      "atlas_mm": [
+        0.0,
+        -34.0,
+        -68.0
+      ]
+    },
+    {
+      "id": "F18",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "A-3-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        -68.0,
+        0.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F19",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "B-4-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        -34.0,
+        34.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F20",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "B-3-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        -34.0,
+        0.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F21",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "B-2-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        -34.0,
+        -34.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F22",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "C-5-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        0.0,
+        68.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F23",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "C-4-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        0.0,
+        34.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F24",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "C-2-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        0.0,
+        -34.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F25",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "C-1-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        0.0,
+        -68.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F26",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "D-4-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        34.0,
+        34.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F27",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "D-3-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        34.0,
+        0.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F28",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "D-2-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        34.0,
+        -34.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F29",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "E-3-v",
+      "component_label": 24,
+      "layer": "inner",
+      "atlas_mm": [
+        68.0,
+        0.0,
+        34.0
+      ]
+    },
+    {
+      "id": "F30",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "B-3-w",
+      "component_label": 24,
+      "layer": "outer",
+      "atlas_mm": [
+        -34.0,
+        0.0,
+        68.0
+      ]
+    },
+    {
+      "id": "F31",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "C-4-w",
+      "component_label": 24,
+      "layer": "outer",
+      "atlas_mm": [
+        0.0,
+        34.0,
+        68.0
+      ]
+    },
+    {
+      "id": "F32",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "C-3-w",
+      "component_label": 24,
+      "layer": "outer",
+      "atlas_mm": [
+        0.0,
+        0.0,
+        68.0
+      ]
+    },
+    {
+      "id": "F33",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "C-2-w",
+      "component_label": 24,
+      "layer": "outer",
+      "atlas_mm": [
+        0.0,
+        -34.0,
+        68.0
+      ]
+    },
+    {
+      "id": "F34",
+      "part": "upper_fiducial_grid",
+      "confluence_address": "D-3-w",
+      "component_label": 24,
+      "layer": "outer",
+      "atlas_mm": [
+        34.0,
+        0.0,
+        68.0
+      ]
+    }
+  ]
+}

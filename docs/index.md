@@ -31,6 +31,7 @@ Skip the transfer step when the clinical image is the registration target: `regi
 - Register a scanner image and measure vials — CLI (`register`, `analyse vial-measurements`)
 - Transfer atlas labels onto another scan grid — CLI (`analyse map-mask`)
 - Measure NEMA wedge slice thickness — CLI (`register --analyse slice-thickness`, `analyse slice-thickness`); see [Interpreting outputs](interpreting-outputs.md#slice-thickness)
+- Estimate scanner geometric distortion at the SPIRIT fiducials — CLI (`register --analyse distortion`, `analyse distortion`); see [Scanner distortion](scanner-distortion.md)
 - Thermometry — ethylene glycol temperature from multi-echo GRE (`analyse eg-thermometry`); see [Interpreting outputs](interpreting-outputs.md#ethylene-glycol-thermometry)
 - Developer QC helpers — CLI (`developer dice`, `developer vials`); see [Developer tools](developer-tools.md)
 
@@ -39,6 +40,7 @@ Skip the transfer step when the clinical image is the registration target: `regi
 - [CLI usage](cli.md)
 - [Python API usage](python-api.md)
 - [Interpreting outputs](interpreting-outputs.md)
+- [Scanner distortion](scanner-distortion.md)
 - [Example pulse sequences](example-pulse-sequences.md)
 - [Developer tools](developer-tools.md)
 

@@ -297,6 +297,7 @@ def generate_world_points_mask(
     image: nibabel.nifti1.Nifti1Image,
     points_mm: Sequence[Sequence[float]],
     mark_radius_voxels: int = 2,
+    description: str = "Wedge corner points (1-based processing order)",
 ) -> nibabel.nifti1.Nifti1Image:
     """Paint world-space points onto ``image``'s grid with 1-based order labels.
 
@@ -308,6 +309,7 @@ def generate_world_points_mask(
         image: Reference NIfTI whose spatial grid and header define the mask.
         points_mm: World-coordinate points in millimetres, in the desired order.
         mark_radius_voxels: Half-extent of the cross painted around each point.
+        description: Short NIfTI header description string.
 
     Returns:
         NIfTI mask matching ``image`` geometry; background is 0.
@@ -352,7 +354,7 @@ def generate_world_points_mask(
     return _nifti_from_mask(
         mask=labelled,
         reference_image=image,
-        description="Wedge corner points (1-based processing order)",
+        description=description,
     )
 
 
@@ -362,6 +364,7 @@ def save_world_points_mask(
     points_mm: Sequence[Sequence[float]],
     output_path: Path,
     mark_radius_voxels: int = 2,
+    description: str = "Wedge corner points (1-based processing order)",
 ) -> Path:
     """Write a NIfTI mask of world points labelled by processing order.
 
@@ -370,6 +373,7 @@ def save_world_points_mask(
         points_mm: World-coordinate points in millimetres, in the desired order.
         output_path: Destination NIfTI path (``.nii.gz`` is appended when missing).
         mark_radius_voxels: Half-extent of the cross painted around each point.
+        description: Short NIfTI header description string.
 
     Returns:
         Absolute path to the saved mask file.
@@ -381,6 +385,7 @@ def save_world_points_mask(
         image=image,
         points_mm=points_mm,
         mark_radius_voxels=mark_radius_voxels,
+        description=description,
     )
     resolved = _resolve_nifti_output_path(output_path=output_path)
     resolved.parent.mkdir(parents=True, exist_ok=True)

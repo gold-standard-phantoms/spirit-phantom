@@ -1,6 +1,6 @@
 # Interpreting outputs
 
-How to read common quality-control and analysis products from this package. This page will grow as more outputs are documented. It currently covers registration checkerboard images, slice-thickness results, and ethylene glycol thermometry.
+How to read common quality-control and analysis products from this package. This page will grow as more outputs are documented. It currently covers registration checkerboard images, slice-thickness results, scanner-distortion residuals, and ethylene glycol thermometry.
 
 ## Checkerboard images
 
@@ -88,6 +88,60 @@ Warning signs:
 - **Enough samples across the profile.** NEMA requires at least six pixels across the projected FWHM. Check `fwhm_mm / pixel_size_mm` in the summary CSV. With a 15° wedge the projected FWHM is about 3.7 times the slice thickness, so slices thinner than about 1.6 × the in-plane pixel size fall below this requirement. In the example above, 5.19 / 0.998 ≈ 5.2 pixels, which is below.
 - **The reported thickness is quantised.** `thickness_mm` follows the NEMA procedure as implemented in `nema_slice_thickness`: the half-maximum crossings are rounded up to whole samples. The result therefore moves in steps of `pixel_size_mm × tan α`, about 0.27 mm for 1 mm pixels. `fwhm_mm` in the CSVs uses interpolated crossings, so `fwhm_mm × tan α` gives an unrounded estimate for comparison (1.39 mm for wedge 1 in the example, against the reported 1.34 mm).
 - **The corner mapping should be accurate.** `slice_thickness.log` records the inverse-transform round-trip residual, which should be well below a voxel. A warning is printed if it exceeds 0.1 mm.
+
+## Scanner distortion
+
+`register --analyse distortion` and `analyse distortion` estimate scanner
+geometric distortion at the 34 SPIRIT fiducials by reporting the displacement
+induced by the affine and B-spline registration stages after excluding rigid
+pose. The full method and open doubts are in
+[Scanner distortion](scanner-distortion.md).
+
+### Terminal summary
+
+```text
+n_fiducials | mean_magnitude_mm | max_magnitude_mm | rms_magnitude_mm | max_nonrigid_roundtrip_residual_mm
+34 | 0.4120 | 1.2030 | 0.5010 | 0.0120
+```
+
+| Column | Meaning |
+| --- | --- |
+| `n_fiducials` | Number of packaged landmarks evaluated (34). |
+| `mean_magnitude_mm` | Mean \(\|p_m - p_r\|\) over fiducials. |
+| `max_magnitude_mm` | Largest per-fiducial magnitude. |
+| `rms_magnitude_mm` | Root-mean-square magnitude. |
+| `max_nonrigid_roundtrip_residual_mm` | Worst absolute residual of affine+B-spline applied to post-rigid points versus `atlas_mm`. Should be ≪ 1 mm. |
+
+### Output files
+
+Files are written to the distortion output directory (by default
+`<registration_output>/distortion/`).
+
+| File | Use it to |
+| --- | --- |
+| `distortion_summary.csv` | Record the aggregate magnitudes above. |
+| `distortion_per_point.csv` | Plot magnitude versus radius from isocentre, or inspect per-axis components. |
+| `fiducials_fixed_mm.nii.gz` | Overlay on the scan: markers should sit on the dark fiducial spheres. |
+| `fiducials_*.txt` | Re-run transformix or external plotting from the stage-wise point dumps. |
+| `affine_bspline_only/` | Inspect the rewritten transform chain with rigid unlinked. |
+| `distortion.log` | Diagnostics for inverse and non-rigid round-trip residuals. |
+
+### Checks before trusting the numbers
+
+- **Fixed-space markers land on the spheres.** If `fiducials_fixed_mm.nii.gz`
+  misses the voids, the registration (or its inverse) is wrong and the residual
+  is not scanner distortion.
+- **Non-rigid round-trip is tiny.** A large
+  `max_nonrigid_roundtrip_residual_mm` means the rewritten affine+B-spline chain
+  does not compose cleanly with the rigid stage; do not trust the table.
+- **Magnitude should trend with radius.** Classic gradient non-linearity grows
+  away from isocentre. A flat or noisy radius plot suggests residual pose error
+  or registration noise rather than a physical field.
+- **Headers look sane.** Voxel size / matrix differences are handled by image
+  geometry, not by the rigid stage; wrong spacing still biases the residual.
+  See [Scanner distortion](scanner-distortion.md#what-rigid-excludes-and-what-it-does-not).
+- **Read the open doubts.** Remaining method caveats are listed under
+  [Scanner distortion](scanner-distortion.md#open-doubts).
 
 ## Ethylene glycol thermometry
 
