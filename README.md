@@ -30,7 +30,7 @@ Skip the transfer step when the clinical image is the registration target: `regi
 
 - Register a scanner image and measure vials — CLI (`register`, `analyse vial-measurements`)
 - Transfer atlas labels onto another scan grid — CLI (`analyse map-mask`)
-- NEMA slice thickness — Python API only (no CLI yet)
+- Measure NEMA wedge slice thickness — CLI (`register --analyse slice-thickness`, `analyse slice-thickness`)
 - Thermometry — in development (ethylene glycol mask helpers exist; no temperature analysis yet)
 - Developer QC helpers — CLI (`developer dice`, `developer vials`); see [Developer tools](docs/developer-tools.md)
 
@@ -48,7 +48,7 @@ uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom'
 The CLI has three top-level groups:
 
 - `register` — atlas-to-scanner registration
-- `analyse` — product analyses (`vial-measurements`, `map-mask`, `eg-mask`)
+- `analyse` — product analyses (`vial-measurements`, `slice-thickness`, `map-mask`, `eg-mask`)
 - `developer` — quality-control helpers (`dice`, `vials`); see [Developer tools](docs/developer-tools.md)
 
 List commands and options:
@@ -76,6 +76,28 @@ uv run spirit-phantom analyse vial-measurements \
   path/to/registration_output/transformed_component_atlas.nii.gz \
   path/to/scanner_image.nii.gz
 ```
+
+Register and measure slice thickness from the two SPIRIT wedges in one step:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --output-directory path/to/registration_output \
+  --analyse slice-thickness
+```
+
+Or measure it later from an existing registration:
+
+```bash
+uv run spirit-phantom analyse slice-thickness \
+  path/to/registration_output \
+  path/to/scanner_image.nii.gz
+```
+
+The terminal prints one thickness per wedge; QC files, profile plots,
+`slice_thickness_summary.csv` and a diagnostic `slice_thickness.log` are
+written to `path/to/registration_output/slice_thickness/`. See
+[Slice thickness](#slice-thickness) below for how to read them.
 
 Atomic ethylene glycol mask generation (single-slice multi-echo GRE):
 
@@ -114,12 +136,41 @@ Narrative guides are ordinary Markdown and can be read on GitHub:
 
 ### Slice Thickness
 
-The NEMA MS-5 2018 slice thickness function will be used as an example. 
-The spirit-phantom function expects a numpy array for the wedge ROI ordered 
-such that the rows each contain one edge transfer function (line up the edge)
-with the signal increasing in the direction of the axis. 
-An array with multiple rows will be used to input more than one edge transfer 
-function.
+Slice thickness follows the wedge method of NEMA MS-5 2018. The analysis maps
+the atlas wedge ROIs into scan space with an elastix-estimated inverse of the
+registration transform. It then samples edge-response functions along each
+wedge, differentiates them to give the slice profile, and multiplies the
+profile's FWHM by tan α (α = 15° for SPIRIT).
+
+Main outputs in `<registration_output>/slice_thickness/`:
+
+- `slice_thickness_summary.csv` — one row per wedge: `thickness_mm`, the
+  interpolated `fwhm_mm`, half-maximum crossings and sampling settings.
+- `wedge_<label>_profiles.png` / `.csv` — edge-response functions and the slice
+  profile with its half-maximum crossings. Expect one clean step and one
+  well-defined peak.
+- `slice_wedge_corners_fixed.nii.gz` — wedge corners in scan space; overlay on
+  the scan to confirm they sit on the wedges.
+- `slice_thickness.log` — diagnostics, including the inverse-transform
+  round-trip residual.
+
+Before trusting the number, check that:
+
+- the two wedges agree;
+- the projected FWHM spans at least six pixels (`fwhm_mm / pixel_size_mm` in
+  the summary CSV), as NEMA requires;
+- you allow for quantisation: `thickness_mm` uses half-maximum crossings
+  rounded up to whole samples, so it moves in steps of
+  `pixel_size_mm × tan α` (about 0.27 mm for 1 mm pixels).
+
+The full guide, with an annotated example plot, is in
+[Interpreting outputs](docs/interpreting-outputs.md#slice-thickness).
+
+To compute thickness from your own edge-response data, call the NEMA function
+directly. It expects a numpy array of shape `(n_samples, n_lines)` in which
+each column is one edge response function (a line up the edge) with the signal
+increasing along the axis. Multiple columns are averaged as separate edge
+response functions.
 
 ```
 from spirit_phantom.core import slice_thickness

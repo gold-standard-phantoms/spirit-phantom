@@ -20,3 +20,4 @@ Serve locally with `uv run mkdocs serve` or use the hosted site.
 - [Visualisation](visualisation.md)
 - [Binary morphology](binary_morphology.md)
 - [Interpolation](interpolation.md)
+- [Progress](progress.md) — CLI stage banners and log capture

@@ -84,10 +84,39 @@ Tables list all 22 configured vials (`A..V`), including thermometry vials `U` an
 
 ## Slice thickness
 
-NEMA MS-5 2018 slice thickness is Python-only (there is no CLI command).
-The function expects a NumPy array for the wedge ROI ordered so that each row
-contains one edge transfer function (line up the edge) with the signal increasing
-along that axis. Multiple rows average more than one edge transfer function.
+To measure both SPIRIT wedges from a registration (the Python equivalent of
+`analyse slice-thickness`):
+
+```python
+from pathlib import Path
+
+from spirit_phantom.core.slice_thickness_analysis import (
+    measure_slice_thickness_from_fixed_wedges,
+)
+
+results = measure_slice_thickness_from_fixed_wedges(
+    fixed_image_path=Path("scanner_image.nii.gz"),
+    transform_parameter_path=Path("registration_output/BSpline_Transform.txt"),
+    moving_image_path=Path("registration_output/Bspline_Image.nii.gz"),
+    atlas_image_path=Path("atlas.nii.gz"),
+    output_directory=Path("registration_output/slice_thickness"),
+    ramp_slope_degrees=15.0,
+    discard_edge_lines=1,
+)
+for result in results:
+    print(result.label, result.thickness_mm)
+```
+
+Each `WedgeThicknessResult` holds the thickness, sample spacing, line and
+sample counts, and the wedge corners in scan space. The output directory
+receives the same files as the CLI; see
+[Interpreting outputs](interpreting-outputs.md#slice-thickness).
+
+To compute thickness from your own edge-response data, call
+`nema_slice_thickness` directly. It expects a NumPy array of shape
+`(n_samples, n_lines)` in which each column is one edge response function (a
+line up the edge) with the signal increasing along that axis. Multiple columns
+are averaged as separate edge response functions.
 
 ```python
 from spirit_phantom.core import slice_thickness
