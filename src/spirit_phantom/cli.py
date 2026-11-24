@@ -61,6 +61,10 @@ def _configure_verbose_logging() -> None:
     affecting library importers.
     """
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
+    # Analyses lower library loggers to DEBUG while writing their log files;
+    # keep that detail out of the console.
+    for handler in logging.getLogger().handlers:
+        handler.setLevel(logging.INFO)
 
 
 def _emit_cli_message(message: str, *, quiet: bool) -> None:
@@ -226,10 +230,6 @@ def _run_slice_thickness(
     if not moving_geometry_path.is_file():
         moving_geometry_path = moving_image_path
 
-    _emit_cli_message(
-        "Mapping wedge corners into fixed space and measuring thickness...",
-        quiet=quiet,
-    )
     from spirit_phantom.core.slice_thickness_analysis import (  # noqa: PLC0415
         measure_slice_thickness_from_fixed_wedges,
     )
@@ -243,6 +243,7 @@ def _run_slice_thickness(
             atlas_image_path=moving_image_path,
             ramp_slope_degrees=ramp_slope_degrees,
             discard_edge_lines=discard_edge_lines,
+            cli_user=not quiet,
         )
     except (RuntimeError, ValueError) as error:
         typer.secho(
@@ -258,9 +259,7 @@ def _run_slice_thickness(
             f"{result.label} | {result.thickness_mm:.4f} | "
             f"{result.pixel_size_mm:.4f} | {result.n_lines} | {result.n_samples}"
         )
-    resolved_output = output_directory.resolve()
-    print(f"Slice-thickness outputs: {resolved_output}")
-    print(f"Thickness summary CSV: {resolved_output / 'slice_thickness_summary.csv'}")
+    print(f"Slice-thickness outputs: {output_directory.resolve()}")
 
 
 def _build_checkerboard_slice_indices(*, fixed_image_path: Path) -> list[int]:

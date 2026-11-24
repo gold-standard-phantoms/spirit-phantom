@@ -49,7 +49,7 @@ import math
 
 import numpy as np
 
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def nema_slice_thickness(
@@ -152,7 +152,7 @@ def full_width_half_maximum(slice_profile: np.ndarray) -> float:
             # Linear interpolation:
             x1, x2 = i, i + 1
             y1, y2 = slice_profile[x1], slice_profile[x2]
-            logging.info(
+            logger.debug(
                 "Left cross: %s, x1: %s, x2: %s, y1: %s, y2: %s, ",
                 left_cross,
                 x1,
@@ -162,13 +162,13 @@ def full_width_half_maximum(slice_profile: np.ndarray) -> float:
             )
             if y2 == y1:
                 left_cross = x1 + 1  # Flat step, pick upper
-                logging.info("left is flat")
+                logger.debug("left is flat")
             else:
                 frac = (half_max_value - y1) / (y2 - y1)
                 left_cross = x1 + frac
                 # Conservative round up (ceil)
                 left_cross = int(np.ceil(left_cross))
-                logging.info("Left not flat, frac: %s", frac)
+                logger.debug("Left not flat, frac: %s", frac)
             break
 
     # Find the last crossing (from above to below)
@@ -179,7 +179,7 @@ def full_width_half_maximum(slice_profile: np.ndarray) -> float:
         if slice_profile[i] < half_max_value and slice_profile[i - 1] >= half_max_value:
             x1, x2 = i - 1, i
             y1, y2 = slice_profile[x1], slice_profile[x2]
-            logging.info(
+            logger.debug(
                 "Right cross: %s, x1: %s, x2: %s, y1: %s, y2: %s",
                 right_cross,
                 x1,
@@ -187,16 +187,16 @@ def full_width_half_maximum(slice_profile: np.ndarray) -> float:
                 y1,
                 y2,
             )
-            logging.info("Slice profile: %s", slice_profile)
+            logger.debug("Slice profile: %s", slice_profile)
             if y2 == y1:
                 right_cross = x1  # Flat step, pick upper
-                logging.info("right is flat")
+                logger.debug("right is flat")
             else:
                 frac = (half_max_value - y1) / (y2 - y1)
                 right_cross = x1 + frac
                 # Conservative round up (ceil)
                 right_cross = int(np.ceil(right_cross))
-                logging.info("Right not flat, frac: %s", frac)
+                logger.debug("Right not flat, frac: %s", frac)
             break
 
     if left_cross is None or right_cross is None:

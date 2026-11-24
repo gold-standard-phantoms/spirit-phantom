@@ -32,11 +32,18 @@ from spirit_phantom.io.points import (
     save_points,
 )
 from spirit_phantom.utils.interpolation import trilinear_sample
+from spirit_phantom.utils.progress import (
+    capture_logs_to_file,
+    print_cli_stage,
+    print_cli_stage_done,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
+SLICE_THICKNESS_LOG_FILENAME = "slice_thickness.log"
+_ANALYSIS_STAGE_COUNT = 3
 _CORNERS_PER_WEDGE = 4
 _DEFAULT_PROFILE_LINES = 5
 _MIN_SAMPLES_PER_LINE = 32
@@ -577,7 +584,7 @@ def map_wedge_corners_to_fixed_space(
     )
 
 
-def measure_slice_thickness_from_fixed_wedges(
+def measure_slice_thickness_from_fixed_wedges(  # noqa: PLR0913
     *,
     fixed_image_path: Path,
     transform_parameter_path: Path,
@@ -587,11 +594,14 @@ def measure_slice_thickness_from_fixed_wedges(
     ramp_slope_degrees: float = 15.0,
     n_lines: int = _DEFAULT_PROFILE_LINES,
     discard_edge_lines: int = 1,
+    cli_user: bool = False,
 ) -> list[WedgeThicknessResult]:
     """Measure slice thickness for both wedges in a registered fixed image.
 
     Writes QC artefacts under ``output_directory``, including:
 
+    - ``slice_thickness.log`` — detailed diagnostics (half-maximum crossings,
+      slice profiles)
     - ``slice_wedge_mask_atlas.nii.gz`` — labelled wedge ROIs in atlas space
     - ``slice_wedge_corners_atlas.nii.gz`` — corner markers labelled ``1..N`` in
       ``wedge_roi_corners()`` / transformix processing order
@@ -616,16 +626,93 @@ def measure_slice_thickness_from_fixed_wedges(
         discard_edge_lines: Number of short-axis edge lines to drop from each
             end before NEMA averaging (reduces partial-volume contamination).
             ``0`` keeps every sampled line.
+        cli_user: Whether the function is being called from the CLI. If True,
+            numbered stage progress messages with elapsed times are printed.
 
     Returns:
         Per-wedge thickness results.
     """
     output_directory.mkdir(parents=True, exist_ok=True)
-    fixed_image = nibabel.nifti1.load(filename=str(fixed_image_path))
-    mask_source_path = (
-        atlas_image_path if atlas_image_path is not None else moving_image_path
-    )
-    atlas_image = nibabel.nifti1.load(filename=str(mask_source_path))
+    with capture_logs_to_file(log_path=output_directory / SLICE_THICKNESS_LOG_FILENAME):
+        stage_label = "Mapping wedge corners"
+        started_at = print_cli_stage(
+            stage=1, total=_ANALYSIS_STAGE_COUNT, label=stage_label, enabled=cli_user
+        )
+        mapped = map_wedge_corners_to_fixed_space(
+            transform_parameter_path=transform_parameter_path,
+            moving_image_path=moving_image_path,
+            output_directory=output_directory,
+        )
+        print_cli_stage_done(
+            stage=1,
+            total=_ANALYSIS_STAGE_COUNT,
+            label=stage_label,
+            started_at=started_at,
+            enabled=cli_user,
+        )
+
+        stage_label = "Saving wedge QC masks"
+        started_at = print_cli_stage(
+            stage=2, total=_ANALYSIS_STAGE_COUNT, label=stage_label, enabled=cli_user
+        )
+        fixed_image = nibabel.nifti1.load(filename=str(fixed_image_path))
+        _save_wedge_qc_outputs(
+            atlas_image=nibabel.nifti1.load(
+                filename=str(
+                    atlas_image_path
+                    if atlas_image_path is not None
+                    else moving_image_path
+                )
+            ),
+            fixed_image=fixed_image,
+            mapped=mapped,
+            output_directory=output_directory,
+        )
+        print_cli_stage_done(
+            stage=2,
+            total=_ANALYSIS_STAGE_COUNT,
+            label=stage_label,
+            started_at=started_at,
+            enabled=cli_user,
+        )
+
+        stage_label = "Measuring slice thickness"
+        started_at = print_cli_stage(
+            stage=3, total=_ANALYSIS_STAGE_COUNT, label=stage_label, enabled=cli_user
+        )
+        results = _measure_wedges(
+            fixed_image=fixed_image,
+            mapped=mapped,
+            output_directory=output_directory,
+            ramp_slope_degrees=ramp_slope_degrees,
+            n_lines=n_lines,
+            discard_edge_lines=discard_edge_lines,
+        )
+        print_cli_stage_done(
+            stage=3,
+            total=_ANALYSIS_STAGE_COUNT,
+            label=stage_label,
+            started_at=started_at,
+            enabled=cli_user,
+        )
+    return results
+
+
+def _save_wedge_qc_outputs(
+    *,
+    atlas_image: nibabel.nifti1.Nifti1Image,
+    fixed_image: nibabel.nifti1.Nifti1Image,
+    mapped: MappedWedgeCorners,
+    output_directory: Path,
+) -> None:
+    """Write wedge ROI / corner masks and the paired fixed-space corner list.
+
+    Args:
+        atlas_image: Atlas (moving) image defining the atlas-space mask grid.
+        fixed_image: Scanner (fixed) image defining the fixed-space mask grid.
+        mapped: Wedge corners mapped into fixed space.
+        output_directory: Destination directory for the QC files.
+    """
     save_slice_mask(
         image=atlas_image,
         output_path=output_directory / "slice_wedge_mask_atlas.nii.gz",
@@ -633,12 +720,6 @@ def measure_slice_thickness_from_fixed_wedges(
     save_wedge_corner_points_mask(
         image=atlas_image,
         output_path=output_directory / "slice_wedge_corners_atlas.nii.gz",
-    )
-
-    mapped = map_wedge_corners_to_fixed_space(
-        transform_parameter_path=transform_parameter_path,
-        moving_image_path=moving_image_path,
-        output_directory=output_directory,
     )
     save_world_points_mask(
         image=fixed_image,
@@ -661,6 +742,32 @@ def measure_slice_thickness_from_fixed_wedges(
                 f"{point[0]:.6f} {point[1]:.6f} {point[2]:.6f} {corner.name}\n"
             )
 
+
+def _measure_wedges(
+    *,
+    fixed_image: nibabel.nifti1.Nifti1Image,
+    mapped: MappedWedgeCorners,
+    output_directory: Path,
+    ramp_slope_degrees: float,
+    n_lines: int,
+    discard_edge_lines: int,
+) -> list[WedgeThicknessResult]:
+    """Sample wedge edge responses, compute NEMA thickness and save diagnostics.
+
+    Writes per-wedge profile CSV/PNG diagnostics and
+    ``slice_thickness_summary.csv`` under ``output_directory``.
+
+    Args:
+        fixed_image: Scanner (fixed) image to sample.
+        mapped: Wedge corners mapped into fixed space.
+        output_directory: Destination directory for diagnostics.
+        ramp_slope_degrees: Wedge angle alpha in degrees.
+        n_lines: Number of profile lines sampled across the short edge.
+        discard_edge_lines: Short-axis edge lines dropped from each end.
+
+    Returns:
+        Per-wedge thickness results.
+    """
     results: list[WedgeThicknessResult] = []
     summary_rows: list[dict[str, float | int]] = []
     for label, corners in sorted(mapped.by_label.items()):

@@ -32,10 +32,14 @@ from spirit_phantom.core.registration_constants import (
     TRANSFORMED_COMPONENT_ATLAS_FILENAME,
     ParameterSet,
 )
+from spirit_phantom.utils.progress import (
+    format_duration,
+    print_cli_stage,
+    print_cli_stage_done,
+)
 
 logger = logging.getLogger(__name__)
 _REGISTRATION_STAGE_COUNT = 4
-_SECONDS_PER_MINUTE = 60
 
 
 _PARAMETER_FILENAMES: dict[ParameterSet, dict[str, str]] = {
@@ -63,25 +67,6 @@ def parameter_filename(*, stage: str, parameter_set: ParameterSet) -> str:
     return _PARAMETER_FILENAMES[parameter_set][stage]
 
 
-def _format_duration(*, seconds: float) -> str:
-    """Format a duration for CLI progress messages.
-
-    Args:
-        seconds: Elapsed time in seconds.
-
-    Returns:
-        Human-readable duration such as ``12.3s`` or ``2m 05s``.
-    """
-    if seconds < _SECONDS_PER_MINUTE:
-        return f"{seconds:.1f}s"
-    minutes = int(seconds // _SECONDS_PER_MINUTE)
-    remaining_seconds = round(seconds - (minutes * _SECONDS_PER_MINUTE))
-    if remaining_seconds == _SECONDS_PER_MINUTE:
-        minutes += 1
-        remaining_seconds = 0
-    return f"{minutes}m {remaining_seconds:02d}s"
-
-
 def _print_cli_stage(*, stage: int, label: str, enabled: bool) -> float:
     """Print a numbered registration stage banner when CLI progress is enabled.
 
@@ -93,9 +78,12 @@ def _print_cli_stage(*, stage: int, label: str, enabled: bool) -> float:
     Returns:
         ``time.perf_counter()`` value at the start of the stage.
     """
-    if enabled:
-        print(f"[{stage}/{_REGISTRATION_STAGE_COUNT}] {label}...")
-    return time.perf_counter()
+    return print_cli_stage(
+        stage=stage,
+        total=_REGISTRATION_STAGE_COUNT,
+        label=label,
+        enabled=enabled,
+    )
 
 
 def _print_cli_stage_done(
@@ -109,9 +97,13 @@ def _print_cli_stage_done(
         started_at: ``time.perf_counter()`` value from stage start.
         enabled: Whether CLI progress messages should be printed.
     """
-    if enabled:
-        elapsed = _format_duration(seconds=time.perf_counter() - started_at)
-        print(f"[{stage}/{_REGISTRATION_STAGE_COUNT}] {label} done ({elapsed})")
+    print_cli_stage_done(
+        stage=stage,
+        total=_REGISTRATION_STAGE_COUNT,
+        label=label,
+        started_at=started_at,
+        enabled=enabled,
+    )
 
 
 class RegistrationResult(NamedTuple):
@@ -718,7 +710,7 @@ def register_atlas(
     )
 
     if cli_user:
-        total_elapsed = _format_duration(
+        total_elapsed = format_duration(
             seconds=time.perf_counter() - registration_started_at,
         )
         print(f"Registration complete ({total_elapsed})")

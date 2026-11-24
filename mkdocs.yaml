@@ -75,6 +75,7 @@ nav:
       - Visualisation: api/visualisation.md
       - Binary morphology: api/binary_morphology.md
       - Interpolation: api/interpolation.md
+      - Progress: api/progress.md
 
 extra_javascript:
   - javascripts/katex.js
