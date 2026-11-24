@@ -81,7 +81,7 @@ def test_analyse_slice_thickness_requires_existing_registration(
 
     assert result.exit_code != 0
     assert "Transform file not found" in " ".join(result.output.split())
-    assert "Mapping wedge corners" not in result.output
+    assert "Inverse registration" not in result.output
 
 
 def test_analyse_slice_thickness_uses_registration_outputs(

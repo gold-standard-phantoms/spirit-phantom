@@ -26,6 +26,10 @@ from spirit_phantom.core.registration_constants import (
     BSPLINE_IMAGE_FILENAME,
     BSPLINE_PARAMETERS_IN_FILENAME,
     BSPLINE_TRANSFORM_FILENAME,
+    INVERSE_AFFINE_PARAMETERS_IN_FILENAME,
+    INVERSE_AFFINE_TRANSFORM_FILENAME,
+    INVERSE_BSPLINE_PARAMETERS_IN_FILENAME,
+    INVERSE_BSPLINE_TRANSFORM_FILENAME,
     RIGID_IMAGE_FILENAME,
     RIGID_PARAMETERS_IN_FILENAME,
     RIGID_TRANSFORM_FILENAME,
@@ -47,6 +51,8 @@ _PARAMETER_FILENAMES: dict[ParameterSet, dict[str, str]] = {
         "rigid": "parameters_Rigid.txt",
         "affine": "parameters_Affine.txt",
         "bspline": "parameters_B_Spline.txt",
+        "inverse_affine": "parameters_Inverse_Affine.txt",
+        "inverse_bspline": "parameters_Inverse_B_Spline.txt",
     },
 }
 
@@ -55,7 +61,8 @@ def parameter_filename(*, stage: str, parameter_set: ParameterSet) -> str:
     """Resolve the packaged elastix parameter filename for a stage.
 
     Args:
-        stage: Registration stage key: ``rigid``, ``affine``, or ``bspline``.
+        stage: Registration stage key: ``rigid``, ``affine``, ``bspline``,
+            ``inverse_affine``, or ``inverse_bspline``.
         parameter_set: Elastix parameter set (regular).
 
     Returns:
@@ -239,6 +246,8 @@ def _save_transform_to_file(
     transform_params: itk.ParameterObject,
     filename: Path,
     initial_transform_file: Path | None = None,
+    *,
+    parameter_map_index: int = 0,
 ) -> Path:
     """Save transform parameters to a file, optionally with reference to initial transform.
 
@@ -260,11 +269,13 @@ def _save_transform_to_file(
         initial_transform_file: Optional path to a previously run transform file.
             When provided, this transform will reference it to enable transform
             chaining. If None, the transform will be saved as standalone.
+        parameter_map_index: Index of the parameter map in ``transform_params``
+            to save (for multi-stage elastix results).
 
     Returns:
         The path to the saved transform parameters file.
     """
-    transform_map = dict(transform_params.GetParameterMap(0))
+    transform_map = dict(transform_params.GetParameterMap(parameter_map_index))
 
     if initial_transform_file:
         transform_map["InitialTransformParameterFileName"] = (
@@ -460,6 +471,86 @@ def _perform_bspline_registration(
         parameters_path=parameters_path,
         transform_path=transform_path,
     )
+
+
+def compute_inverse_transform(
+    *,
+    transform_parameter_path: Path,
+    fixed_image_path: Path,
+    output_directory: Path,
+    parameter_set: ParameterSet = ParameterSet.REGULAR,
+) -> Path:
+    """Estimate the inverse of an elastix transform with ``DisplacementMagnitudePenalty``.
+
+    Follows the elastix manual's inversion recipe: the forward transform ``T``
+    (fixed → moving) is used as the initial transform of a registration of the
+    fixed image to itself, and a new transform ``S`` is optimised so that
+    ``S(T(x)) ≈ x``. ``S`` is estimated in two stages, an affine stage that
+    absorbs the linear part of ``T`` (including large rotations such as the
+    inverted-phantom flip) followed by a B-spline stage that refines the
+    residual deformation.
+
+    The saved inverse chain maps moving-domain points to the fixed domain when
+    applied with transformix. Its output geometry is that of the fixed image,
+    so it is intended for point mapping rather than image resampling.
+
+    Args:
+        transform_parameter_path: Forward elastix transform (fixed → moving).
+            May chain earlier transforms via ``InitialTransformParameterFileName``.
+        fixed_image_path: Fixed image of the forward registration; defines the
+            domain over which the inverse is fitted.
+        output_directory: Directory for the inverse parameter and transform
+            files.
+        parameter_set: Elastix parameter set (regular).
+
+    Returns:
+        Path to the final inverse transform file (B-spline stage), which
+        chains the inverse affine stage.
+    """
+    logger.info("Compute inverse transform: start")
+    output_directory.mkdir(parents=True, exist_ok=True)
+
+    stage_filenames = (
+        ("inverse_affine", INVERSE_AFFINE_PARAMETERS_IN_FILENAME),
+        ("inverse_bspline", INVERSE_BSPLINE_PARAMETERS_IN_FILENAME),
+    )
+    inverse_parameter_object = itk.ParameterObject.New()
+    for stage, parameters_in_filename in stage_filenames:
+        stage_parameter_object = _load_parameter_object(
+            filename=parameter_filename(stage=stage, parameter_set=parameter_set)
+        )
+        stage_parameter_object.WriteParameterFile(
+            str(output_directory / parameters_in_filename)
+        )
+        inverse_parameter_object.AddParameterMap(
+            stage_parameter_object.GetParameterMap(0)
+        )
+
+    fixed_image = itk.imread(str(fixed_image_path), itk.F)
+    _, inverse_transform = itk.elastix_registration_method(
+        fixed_image,
+        fixed_image,
+        parameter_object=inverse_parameter_object,
+        initial_transform_parameter_file_name=str(transform_parameter_path),
+        log_to_console=False,
+    )
+
+    # The forward transform only seeds the optimisation; the inverse chain
+    # must not reference it.
+    affine_transform_path = _save_transform_to_file(
+        inverse_transform,
+        output_directory / INVERSE_AFFINE_TRANSFORM_FILENAME,
+        initial_transform_file=None,
+        parameter_map_index=0,
+    )
+    bspline_transform_path = _save_transform_to_file(
+        inverse_transform,
+        output_directory / INVERSE_BSPLINE_TRANSFORM_FILENAME,
+        initial_transform_file=affine_transform_path,
+        parameter_map_index=1,
+    )
+    logger.info("Compute inverse transform: end")
+    return bspline_transform_path
 
 
 def _register(

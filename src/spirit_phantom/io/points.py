@@ -24,11 +24,17 @@ a sign flip on X and Y. Conversion is applied at the transformix boundary so
 callers (atlas wedge ROIs, nibabel sampling/masks) stay consistent.
 """
 
+import logging
 from collections.abc import Sequence
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
 import itk
+
+from spirit_phantom.core.registration import compute_inverse_transform
+
+logger = logging.getLogger(__name__)
 
 # Supported dimensions for point transformations
 DIM_2D = 2
@@ -37,9 +43,29 @@ DIM_3D = 3
 # Minimum lines in a valid transformix points file (type line + count line)
 _MIN_HEADER_LINES = 2
 
+# Round-trip residual above which an elastix-estimated inverse is reported
+_INVERSE_RESIDUAL_WARNING_MM = 0.1
+
+_FIXED_SPACE_POINTS_FILENAME = "fixed_space_points.txt"
+
 _PointType = Literal["point", "index"]
 _Point = Sequence[float]
 _Points = Sequence[_Point]
+
+
+class InversionMethod(StrEnum):
+    """Method used to map moving-domain points into the fixed domain.
+
+    Attributes:
+        ELASTIX: Estimate an inverse transform with elastix
+            (``DisplacementMagnitudePenalty``) and apply it with transformix.
+        PICARD: Solve ``T(x) = p`` per point by fixed-point (Picard)
+            iteration through the forward transform. Only converges when the
+            displacement field is a contraction (e.g. small rotations).
+    """
+
+    ELASTIX = "elastix"
+    PICARD = "picard"
 
 
 def nifti_world_to_itk_physical(point: _Point) -> list[float]:
@@ -279,24 +305,93 @@ def transform_points_with_transformix(
     return [itk_physical_to_nifti_world(point) for point in itk_output]
 
 
-def invert_points_through_transformix(
+def _max_residual_mm(*, mapped: _Points, targets: _Points) -> float:
+    """Return the largest per-axis absolute difference between point sets.
+
+    Args:
+        mapped: Points produced by a transform.
+        targets: Expected points, parallel to ``mapped``.
+
+    Returns:
+        Maximum absolute coordinate difference in millimetres.
+    """
+    return max(
+        abs(mapped_point[dim] - target[dim])
+        for mapped_point, target in zip(mapped, targets, strict=True)
+        for dim in range(len(target))
+    )
+
+
+def _invert_points_with_elastix(
     *,
-    moving_points: _Points,
+    targets: list[list[float]],
+    transform_parameter_path: Path,
+    fixed_image_path: Path,
+    moving_image_path: Path,
+    output_directory: Path,
+) -> list[list[float]]:
+    """Map moving-domain points to fixed space via an elastix-estimated inverse.
+
+    Estimates ``T⁻¹`` with :func:`compute_inverse_transform`, applies it with
+    transformix, then pushes the result back through ``T`` to report the
+    round-trip residual.
+
+    Args:
+        targets: NIfTI/nibabel world-coordinate points in the moving domain.
+        transform_parameter_path: Forward elastix transform (fixed → moving).
+        fixed_image_path: Fixed image of the forward registration.
+        moving_image_path: Moving image path used by transformix for geometry
+            of the round-trip check.
+        output_directory: Directory for the inverse transform and point I/O.
+
+    Returns:
+        Fixed-domain NIfTI/nibabel world-coordinate points.
+    """
+    inverse_transform_path = compute_inverse_transform(
+        transform_parameter_path=transform_parameter_path,
+        fixed_image_path=fixed_image_path,
+        output_directory=output_directory / "inverse_transform",
+    )
+    fixed_points = transform_points_with_transformix(
+        points=targets,
+        transform_parameter_path=inverse_transform_path,
+        moving_image_path=fixed_image_path,
+        output_directory=output_directory / "inverse_points",
+    )
+    round_trip = transform_points_with_transformix(
+        points=fixed_points,
+        transform_parameter_path=transform_parameter_path,
+        moving_image_path=moving_image_path,
+        output_directory=output_directory / "round_trip_check",
+    )
+    residual = _max_residual_mm(mapped=round_trip, targets=targets)
+    if residual > _INVERSE_RESIDUAL_WARNING_MM:
+        logger.warning(
+            "Elastix inverse round-trip residual %.4g mm exceeds %.4g mm.",
+            residual,
+            _INVERSE_RESIDUAL_WARNING_MM,
+        )
+    else:
+        logger.info("Elastix inverse round-trip residual: %.4g mm.", residual)
+    return fixed_points
+
+
+def _invert_points_with_picard_iteration(
+    *,
+    targets: list[list[float]],
     transform_parameter_path: Path,
     moving_image_path: Path,
     output_directory: Path,
-    max_iterations: int = 10,
-    tolerance_mm: float = 1e-4,
+    max_iterations: int,
+    tolerance_mm: float,
 ) -> list[list[float]]:
-    """Map moving-domain points into fixed space by inverting transformix ``T``.
+    """Map moving-domain points to fixed space by fixed-point iteration.
 
     Finds fixed points ``x`` such that ``T(x) ≈ p_moving`` using fixed-point
-    iteration ``x ← p - (T(x) - x)``. Useful for atlas landmarks that should
-    land in scan (fixed) space after registration.
+    iteration ``x ← p - (T(x) - x)``.
 
     Args:
-        moving_points: NIfTI/nibabel world-coordinate points in the
-            moving/atlas domain (same frame as the atlas affine).
+        targets: NIfTI/nibabel world-coordinate points in the moving domain.
         transform_parameter_path: Forward elastix transform (fixed → moving).
         moving_image_path: Moving image path used by transformix for geometry.
         output_directory: Directory for per-iteration transformix outputs.
@@ -305,19 +400,11 @@ def invert_points_through_transformix(
             this threshold.
 
     Returns:
-        Corresponding NIfTI/nibabel world-coordinate points in the fixed image
-        domain (compatible with ``fixed_image.affine`` and nibabel masks).
+        Fixed-domain NIfTI/nibabel world-coordinate points.
 
     Raises:
-        ValueError: If ``moving_points`` is empty.
         RuntimeError: If the iteration fails to converge.
     """
-    output_directory.mkdir(parents=True, exist_ok=True)
-    targets = [list(map(float, point)) for point in moving_points]
-    if not targets:
-        msg = "Cannot invert an empty point set"
-        raise ValueError(msg)
-
     estimates = [point.copy() for point in targets]
     residual = float("inf")
     for iteration in range(max_iterations):
@@ -328,28 +415,17 @@ def invert_points_through_transformix(
             moving_image_path=moving_image_path,
             output_directory=iteration_directory,
         )
-        next_estimates: list[list[float]] = []
-        residual = 0.0
-        for target, estimate, mapped_point in zip(
-            targets, estimates, mapped, strict=True
-        ):
-            point_residual = max(
-                abs(mapped_point[dim] - target[dim]) for dim in range(len(target))
+        residual = _max_residual_mm(mapped=mapped, targets=targets)
+        estimates = [
+            [
+                target[dim] - (mapped_point[dim] - estimate[dim])
+                for dim in range(len(target))
+            ]
+            for target, estimate, mapped_point in zip(
+                targets, estimates, mapped, strict=True
             )
-            residual = max(residual, point_residual)
-            next_estimates.append(
-                [
-                    target[dim] - (mapped_point[dim] - estimate[dim])
-                    for dim in range(len(target))
-                ]
-            )
-        estimates = next_estimates
+        ]
         if residual <= tolerance_mm:
-            save_points(
-                points=estimates,
-                output_path=output_directory / "fixed_space_points.txt",
-                point_type="point",
-            )
             return estimates
 
     msg = (
@@ -357,6 +433,77 @@ def invert_points_through_transformix(
         f"iterations (residual={residual:.6g} mm, tolerance={tolerance_mm} mm)."
     )
     raise RuntimeError(msg)
+
+
+def invert_points_through_transformix(
+    *,
+    moving_points: _Points,
+    transform_parameter_path: Path,
+    fixed_image_path: Path,
+    moving_image_path: Path,
+    output_directory: Path,
+    method: InversionMethod = InversionMethod.ELASTIX,
+    max_iterations: int = 10,
+    tolerance_mm: float = 1e-4,
+) -> list[list[float]]:
+    """Map moving-domain points into fixed space by inverting transformix ``T``.
+
+    Useful for atlas landmarks that should land in scan (fixed) space after
+    registration. By default the inverse is estimated with elastix
+    (``DisplacementMagnitudePenalty``); see :class:`InversionMethod` for the
+    alternatives. The result is also written to ``fixed_space_points.txt``.
+
+    Args:
+        moving_points: NIfTI/nibabel world-coordinate points in the
+            moving/atlas domain (same frame as the atlas affine).
+        transform_parameter_path: Forward elastix transform (fixed → moving).
+        fixed_image_path: Fixed image of the forward registration. Defines the
+            domain of the elastix inverse; unused by Picard iteration.
+        moving_image_path: Moving image path used by transformix for geometry.
+        output_directory: Directory for intermediate transformix outputs.
+        method: Inversion method.
+        max_iterations: Maximum fixed-point iterations (Picard only).
+        tolerance_mm: Stop when max absolute residual in millimetres is below
+            this threshold (Picard only).
+
+    Returns:
+        Corresponding NIfTI/nibabel world-coordinate points in the fixed image
+        domain (compatible with ``fixed_image.affine`` and nibabel masks).
+
+    Raises:
+        ValueError: If ``moving_points`` is empty.
+        RuntimeError: If Picard iteration fails to converge.
+    """
+    output_directory.mkdir(parents=True, exist_ok=True)
+    targets = [list(map(float, point)) for point in moving_points]
+    if not targets:
+        msg = "Cannot invert an empty point set"
+        raise ValueError(msg)
+
+    if InversionMethod(method) is InversionMethod.PICARD:
+        fixed_points = _invert_points_with_picard_iteration(
+            targets=targets,
+            transform_parameter_path=transform_parameter_path,
+            moving_image_path=moving_image_path,
+            output_directory=output_directory,
+            max_iterations=max_iterations,
+            tolerance_mm=tolerance_mm,
+        )
+    else:
+        fixed_points = _invert_points_with_elastix(
+            targets=targets,
+            transform_parameter_path=transform_parameter_path,
+            fixed_image_path=fixed_image_path,
+            moving_image_path=moving_image_path,
+            output_directory=output_directory,
+        )
+
+    save_points(
+        points=fixed_points,
+        output_path=output_directory / _FIXED_SPACE_POINTS_FILENAME,
+        point_type="point",
+    )
+    return fixed_points
 
 
 def parse_transformix_output(output_path: Path) -> list[list[float]]:

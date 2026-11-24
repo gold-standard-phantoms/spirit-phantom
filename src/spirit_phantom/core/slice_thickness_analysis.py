@@ -1,8 +1,9 @@
 """Slice-thickness analysis via registered wedge ROIs.
 
 Maps atlas wedge corners into fixed (scan) space by inverting the elastix
-transform with transformix, samples edge-response profiles from the fixed
-image rectangles, and computes NEMA MS 5-2018 slice thickness.
+transform (an elastix-estimated inverse applied with transformix), samples
+edge-response profiles from the fixed image rectangles, and computes NEMA
+MS 5-2018 slice thickness.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from spirit_phantom.core.slice_thickness import (
     nema_slice_thickness,
 )
 from spirit_phantom.io.points import (
+    InversionMethod,
     invert_points_through_transformix,
     save_points,
 )
@@ -538,16 +540,21 @@ class MappedWedgeCorners:
 def map_wedge_corners_to_fixed_space(
     *,
     transform_parameter_path: Path,
+    fixed_image_path: Path,
     moving_image_path: Path,
     output_directory: Path,
+    inversion_method: InversionMethod = InversionMethod.ELASTIX,
 ) -> MappedWedgeCorners:
     """Map atlas wedge corners into fixed space by inverting transformix ``T``.
 
     Args:
         transform_parameter_path: Final elastix transform (typically
             ``BSpline_Transform.txt``), chaining earlier stages.
+        fixed_image_path: Scanner (fixed) image of the registration; defines
+            the domain of the elastix-estimated inverse.
         moving_image_path: Moving image used by transformix for geometry.
         output_directory: Directory for transformix point I/O.
+        inversion_method: Method used to invert the forward transform.
 
     Returns:
         Mapped corners preserving ``wedge_roi_corners()`` processing order.
@@ -563,8 +570,10 @@ def map_wedge_corners_to_fixed_space(
     fixed_points = invert_points_through_transformix(
         moving_points=moving_points,
         transform_parameter_path=transform_parameter_path,
+        fixed_image_path=fixed_image_path,
         moving_image_path=moving_image_path,
         output_directory=output_directory / "moving_to_fixed",
+        method=inversion_method,
     )
 
     by_label: dict[int, list[list[float]]] = {}
@@ -600,8 +609,8 @@ def measure_slice_thickness_from_fixed_wedges(  # noqa: PLR0913
 
     Writes QC artefacts under ``output_directory``, including:
 
-    - ``slice_thickness.log`` — detailed diagnostics (half-maximum crossings,
-      slice profiles)
+    - ``slice_thickness.log`` — detailed diagnostics (inverse-transform
+      residual, half-maximum crossings, slice profiles)
     - ``slice_wedge_mask_atlas.nii.gz`` — labelled wedge ROIs in atlas space
     - ``slice_wedge_corners_atlas.nii.gz`` — corner markers labelled ``1..N`` in
       ``wedge_roi_corners()`` / transformix processing order
@@ -634,12 +643,13 @@ def measure_slice_thickness_from_fixed_wedges(  # noqa: PLR0913
     """
     output_directory.mkdir(parents=True, exist_ok=True)
     with capture_logs_to_file(log_path=output_directory / SLICE_THICKNESS_LOG_FILENAME):
-        stage_label = "Mapping wedge corners"
+        stage_label = "Inverse registration"
         started_at = print_cli_stage(
             stage=1, total=_ANALYSIS_STAGE_COUNT, label=stage_label, enabled=cli_user
         )
         mapped = map_wedge_corners_to_fixed_space(
             transform_parameter_path=transform_parameter_path,
+            fixed_image_path=fixed_image_path,
             moving_image_path=moving_image_path,
             output_directory=output_directory,
         )
