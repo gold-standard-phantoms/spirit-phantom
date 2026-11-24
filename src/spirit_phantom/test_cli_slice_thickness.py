@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from typer.testing import CliRunner
@@ -14,8 +15,6 @@ from spirit_phantom.core import (
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     import pytest
 
 
@@ -147,11 +146,19 @@ def test_register_analyse_slice_thickness_runs_after_registration(
     moving_image.write_bytes(b"moving")
     output_directory = tmp_path / "out"
     captured: dict[str, object] = {}
+    inverse_path = output_directory / "Inverse_BSpline_Transform.txt"
 
     def _fake_run_registration_isolated(
         **_: object,
     ) -> registration.RegistrationResult:
         return _write_registration_outputs(output_directory)
+
+    def _fake_ensure_inverse(**kwargs: object) -> Path:
+        path = Path(str(kwargs["registration_directory"])) / (
+            "Inverse_BSpline_Transform.txt"
+        )
+        path.write_text("inverse", encoding="utf-8")
+        return path
 
     def _fake_measure(
         **kwargs: object,
@@ -163,6 +170,11 @@ def test_register_analyse_slice_thickness_runs_after_registration(
         guarded_registration,
         "run_registration_isolated",
         _fake_run_registration_isolated,
+    )
+    monkeypatch.setattr(
+        registration,
+        "ensure_inverse_transform",
+        _fake_ensure_inverse,
     )
     monkeypatch.setattr(
         slice_thickness_analysis,
@@ -189,4 +201,6 @@ def test_register_analyse_slice_thickness_runs_after_registration(
         output_directory / "BSpline_Transform.txt"
     )
     assert captured["output_directory"] == output_directory / "slice_thickness"
+    assert captured["registration_directory"] == output_directory
+    assert captured["inverse_transform_path"] == inverse_path
     assert captured["discard_edge_lines"] == 1

@@ -99,15 +99,19 @@ uv run spirit-phantom analyse distortion \
   path/to/scanner_image.nii.gz
 ```
 
-Or in one step:
+Or in one step (optionally alongside other analyses):
 
 ```bash
 uv run spirit-phantom register \
   path/to/scanner_image.nii.gz \
-  --analyse distortion
+  --analyse distortion \
+  --analyse slice-thickness
 ```
 
-Outputs default to `<registration_output>/distortion/`.
+The inverse of the registration transform is stored once in the registration
+directory as `Inverse_BSpline_Transform.txt` and shared with slice thickness
+when both are selected. Outputs default to
+`<registration_output>/distortion/`.
 
 ## Python API
 

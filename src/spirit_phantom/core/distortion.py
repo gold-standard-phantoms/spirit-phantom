@@ -24,7 +24,10 @@ import nibabel
 
 from spirit_phantom.core.fiducials import Fiducial, load_spirit_fiducials
 from spirit_phantom.core.generate_slice_mask import save_world_points_mask
-from spirit_phantom.core.registration import save_transform_parameter_file
+from spirit_phantom.core.registration import (
+    ensure_inverse_transform,
+    save_transform_parameter_file,
+)
 from spirit_phantom.core.registration_constants import (
     AFFINE_TRANSFORM_FILENAME,
     BSPLINE_IMAGE_FILENAME,
@@ -136,7 +139,9 @@ class DistortionResult:
     affine_bspline_only_transform_path: Path
 
 
-def _as_xyz(*, point: list[float] | tuple[float, float, float]) -> tuple[float, float, float]:
+def _as_xyz(
+    *, point: list[float] | tuple[float, float, float]
+) -> tuple[float, float, float]:
     """Coerce a length-3 sequence to a float triple.
 
     Args:
@@ -259,9 +264,7 @@ def build_affine_bspline_only_transform(
 
     bspline_params = itk.ParameterObject.New()
     bspline_params.ReadParameterFile(str(bspline_transform_path))
-    standalone_bspline_path = (
-        output_directory / BSPLINE_AFFINE_ONLY_TRANSFORM_FILENAME
-    )
+    standalone_bspline_path = output_directory / BSPLINE_AFFINE_ONLY_TRANSFORM_FILENAME
     save_transform_parameter_file(
         transform_params=bspline_params,
         filename=standalone_bspline_path,
@@ -359,7 +362,9 @@ def summarise_distortions(
     magnitudes = [point.magnitude_mm for point in points]
     mean_magnitude = sum(magnitudes) / len(magnitudes)
     max_magnitude = max(magnitudes)
-    rms_magnitude = math.sqrt(sum(value * value for value in magnitudes) / len(magnitudes))
+    rms_magnitude = math.sqrt(
+        sum(value * value for value in magnitudes) / len(magnitudes)
+    )
     max_roundtrip = max(
         abs(coord)
         for point in points
@@ -491,6 +496,7 @@ def evaluate_scanner_distortion(  # noqa: PLR0915
     moving_image_path: Path | None = None,
     output_directory: Path,
     fiducials_config_path: Path | None = None,
+    inverse_transform_path: Path | None = None,
     inversion_method: InversionMethod = InversionMethod.ELASTIX,
     cli_user: bool = False,
 ) -> DistortionResult:
@@ -499,9 +505,11 @@ def evaluate_scanner_distortion(  # noqa: PLR0915
     Steps:
 
     1. Map packaged ``atlas_mm`` fiducials into fixed/scan space with the
-       inverse of the full ``BSpline_Transform.txt`` chain (rigid∘affine∘
-       B-spline). These coordinates should land on the physical distortion
-       markers in the scan when registration is accurate.
+       shared inverse of the full ``BSpline_Transform.txt`` chain
+       (rigid∘affine∘B-spline), created once via
+       :func:`~spirit_phantom.core.registration.ensure_inverse_transform`.
+       These coordinates should land on the physical distortion markers in
+       the scan when registration is accurate.
     2. Apply the rigid stage alone to those fixed-space points to obtain the
        post-rigid / pose-aligned intermediate frame.
     3. Build an affine+B-spline-only transform (rigid unlinked) and apply it
@@ -524,6 +532,9 @@ def evaluate_scanner_distortion(  # noqa: PLR0915
             CSVs and QC masks.
         fiducials_config_path: Optional override for the packaged fiducials
             JSON.
+        inverse_transform_path: Optional precomputed inverse. When omitted,
+            :func:`~spirit_phantom.core.registration.ensure_inverse_transform`
+            is called on ``registration_directory``.
         inversion_method: Method used to invert the full forward transform.
         cli_user: When True, print numbered stage progress with timings.
 
@@ -572,6 +583,15 @@ def evaluate_scanner_distortion(  # noqa: PLR0915
         started_at = print_cli_stage(
             stage=1, total=_ANALYSIS_STAGE_COUNT, label=stage_label, enabled=cli_user
         )
+        resolved_inverse = (
+            inverse_transform_path
+            if inverse_transform_path is not None
+            else ensure_inverse_transform(
+                registration_directory=registration_directory,
+                fixed_image_path=fixed_image_path,
+                forward_transform_path=bspline_transform_path,
+            )
+        )
         fixed_mm = invert_points_through_transformix(
             moving_points=[list(point) for point in atlas_mm],
             transform_parameter_path=bspline_transform_path,
@@ -579,6 +599,7 @@ def evaluate_scanner_distortion(  # noqa: PLR0915
             moving_image_path=resolved_moving_image_path,
             output_directory=output_directory / "moving_to_fixed",
             method=inversion_method,
+            inverse_transform_path=resolved_inverse,
         )
         save_points(
             points=fixed_mm,

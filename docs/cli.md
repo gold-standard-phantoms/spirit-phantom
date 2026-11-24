@@ -132,22 +132,28 @@ In the combined case, detailed vial statistics are saved automatically to:
 
 `path/to/registration_output/vial_statistics_details.txt`
 
-`--analyse` accepts `vial-measurements`, `slice-thickness`, or `distortion`. To
-register and measure slice thickness in one step:
+`--analyse` accepts `vial-measurements`, `slice-thickness`, or `distortion`.
+Repeat the flag to run more than one after the same registration:
 
 ```bash
 uv run spirit-phantom register \
   path/to/scanner_image.nii.gz \
   --output-directory path/to/registration_output \
-  --analyse slice-thickness
+  --analyse slice-thickness \
+  --analyse distortion
 ```
+
+Slice-thickness and distortion both need the inverse of the registration
+transform. That inverse is written once beside the forward transforms as
+`Inverse_BSpline_Transform.txt` (with `Inverse_Affine_Transform.txt`) and
+reused by every analysis that needs it.
 
 Slice-thickness outputs are written to
 `path/to/registration_output/slice_thickness/`. `--ramp-slope-degrees` and
 `--discard-edge-lines` behave as in `analyse slice-thickness` below, and only
-take effect with `--analyse slice-thickness`.
+take effect when slice-thickness is among the selected analyses.
 
-Other analyses are standalone `analyse` subcommands.
+Other analyses are also available as standalone `analyse` subcommands.
 
 ## Standalone analyses
 
@@ -241,7 +247,8 @@ beside the first GRE image:
 
 Measure NEMA wedge slice thickness from a previous `register` run. The
 registration directory must contain `BSpline_Transform.txt`; this command does
-not register.
+not register. The shared inverse (`Inverse_BSpline_Transform.txt`) is created
+in the registration directory on first use and reused thereafter.
 
 ```bash
 uv run spirit-phantom analyse slice-thickness \
@@ -289,7 +296,9 @@ file shows and the checks to make before trusting the result.
 
 Estimate scanner geometric distortion at the packaged SPIRIT fiducials from a
 previous `register` run. The registration directory must contain
-`Rigid_Transform.txt`, `Affine_Transform.txt` and `BSpline_Transform.txt`.
+`Rigid_Transform.txt`, `Affine_Transform.txt` and `BSpline_Transform.txt`. The
+shared inverse is created or reused in that directory the same way as for
+slice thickness.
 
 ```bash
 uv run spirit-phantom analyse distortion \

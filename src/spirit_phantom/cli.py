@@ -67,6 +67,33 @@ class ThermometryMethod(StrEnum):
     REGIONWISE_BOOTSTRAP = "regionwise_bootstrap"
 
 
+_INVERSE_ANALYSES = frozenset(
+    {
+        AnalysisMethod.SLICE_THICKNESS,
+        AnalysisMethod.DISTORTION,
+    }
+)
+
+
+def _unique_analyses(analyses: Sequence[AnalysisMethod]) -> list[AnalysisMethod]:
+    """Return analyses in first-seen order without duplicates.
+
+    Args:
+        analyses: Selected analysis methods, possibly with repeats.
+
+    Returns:
+        Deduplicated list preserving the original order.
+    """
+    seen: set[AnalysisMethod] = set()
+    ordered: list[AnalysisMethod] = []
+    for method in analyses:
+        if method in seen:
+            continue
+        seen.add(method)
+        ordered.append(method)
+    return ordered
+
+
 def _configure_verbose_logging() -> None:
     """Surface library INFO progress messages for verbose CLI runs.
 
@@ -274,6 +301,7 @@ def _run_slice_thickness(
     ramp_slope_degrees: float,
     discard_edge_lines: int,
     quiet: bool,
+    inverse_transform_path: Path | None = None,
 ) -> None:
     """Measure wedge slice thickness from an existing registration and print results.
 
@@ -286,6 +314,8 @@ def _run_slice_thickness(
         ramp_slope_degrees: Wedge angle used by the NEMA calculation.
         discard_edge_lines: Short-axis edge lines discarded from each end.
         quiet: Suppress progress messages.
+        inverse_transform_path: Optional shared inverse from
+            :func:`~spirit_phantom.core.registration.ensure_inverse_transform`.
 
     Raises:
         typer.BadParameter: If the registration transform is missing.
@@ -319,12 +349,14 @@ def _run_slice_thickness(
             transform_parameter_path=transform_path,
             moving_image_path=moving_geometry_path,
             output_directory=output_directory,
+            registration_directory=registration_directory,
+            inverse_transform_path=inverse_transform_path,
             atlas_image_path=moving_image_path,
             ramp_slope_degrees=ramp_slope_degrees,
             discard_edge_lines=discard_edge_lines,
             cli_user=not quiet,
         )
-    except (RuntimeError, ValueError) as error:
+    except (FileNotFoundError, RuntimeError, ValueError) as error:
         typer.secho(
             f"Slice-thickness analysis failed: {error}",
             fg=typer.colors.RED,
@@ -348,6 +380,7 @@ def _run_distortion(
     registration_directory: Path,
     output_directory: Path,
     quiet: bool,
+    inverse_transform_path: Path | None = None,
 ) -> None:
     """Estimate scanner distortion at SPIRIT fiducials and print a summary.
 
@@ -358,6 +391,8 @@ def _run_distortion(
             rigid, affine and B-spline transform files.
         output_directory: Directory for point files, CSVs and QC masks.
         quiet: Suppress progress messages.
+        inverse_transform_path: Optional shared inverse from
+            :func:`~spirit_phantom.core.registration.ensure_inverse_transform`.
 
     Raises:
         typer.BadParameter: If a required registration transform is missing.
@@ -397,6 +432,7 @@ def _run_distortion(
             fixed_image_path=fixed_image_path,
             moving_image_path=moving_geometry_path,
             output_directory=output_directory,
+            inverse_transform_path=inverse_transform_path,
             cli_user=not quiet,
         )
     except (FileNotFoundError, RuntimeError, ValueError) as error:
@@ -418,6 +454,113 @@ def _run_distortion(
         f"{summary.max_nonrigid_roundtrip_residual_mm:.4f}"
     )
     print(f"Distortion outputs: {output_directory.resolve()}")
+
+
+def _ensure_shared_inverse_transform(
+    *,
+    registration_directory: Path,
+    fixed_image_path: Path,
+    quiet: bool,
+) -> Path:
+    """Create or reuse ``Inverse_BSpline_Transform.txt`` in the registration dir.
+
+    Args:
+        registration_directory: ``register`` output directory.
+        fixed_image_path: Scanner (fixed) image of the registration.
+        quiet: Suppress progress messages.
+
+    Returns:
+        Path to the shared inverse B-spline transform head.
+    """
+    from spirit_phantom.core.registration import (  # noqa: PLC0415
+        ensure_inverse_transform,
+    )
+
+    _emit_cli_message(
+        "Ensuring shared inverse transform in registration directory...",
+        quiet=quiet,
+    )
+    inverse_path = ensure_inverse_transform(
+        registration_directory=registration_directory,
+        fixed_image_path=fixed_image_path,
+    )
+    _emit_cli_message(f"Inverse transform: {inverse_path}", quiet=quiet)
+    return inverse_path
+
+
+def _run_selected_analyses(  # noqa: PLR0913
+    *,
+    analyses: Sequence[AnalysisMethod],
+    fixed_image_path: Path,
+    moving_image_path: Path,
+    registration_directory: Path,
+    transformed_component_atlas_path: Path | None,
+    erosion_voxels: int,
+    ramp_slope_degrees: float,
+    discard_edge_lines: int,
+    quiet: bool,
+) -> None:
+    """Run one or more analyses, ensuring the shared inverse at most once.
+
+    Args:
+        analyses: Selected analysis methods in run order.
+        fixed_image_path: Scanner (fixed) image used as the registration target.
+        moving_image_path: Atlas (moving) image used for registration.
+        registration_directory: Registration output directory.
+        transformed_component_atlas_path: Transformed component atlas when vial
+            measurements are requested.
+        erosion_voxels: Erosion voxels for vial measurement analysis.
+        ramp_slope_degrees: Wedge angle for slice-thickness analysis.
+        discard_edge_lines: Edge lines dropped for slice-thickness analysis.
+        quiet: Suppress progress messages.
+    """
+    selected = _unique_analyses(analyses)
+    if not selected:
+        return
+
+    inverse_transform_path: Path | None = None
+    if _INVERSE_ANALYSES.intersection(selected):
+        inverse_transform_path = _ensure_shared_inverse_transform(
+            registration_directory=registration_directory,
+            fixed_image_path=fixed_image_path,
+            quiet=quiet,
+        )
+
+    for method in selected:
+        _emit_cli_message(f"Running analysis: {method.value}", quiet=quiet)
+        if method is AnalysisMethod.VIAL_MEASUREMENTS:
+            if transformed_component_atlas_path is None:
+                msg = "Registration did not produce a transformed component atlas."
+                raise RuntimeError(msg)
+            _run_vial_measurements(
+                transformed_component_atlas_image_path=transformed_component_atlas_path,
+                mri_scan_image_path=fixed_image_path,
+                erosion_voxels=erosion_voxels,
+                output_directory=registration_directory,
+                save_results=True,
+            )
+        elif method is AnalysisMethod.SLICE_THICKNESS:
+            _run_slice_thickness(
+                fixed_image_path=fixed_image_path,
+                moving_image_path=moving_image_path,
+                registration_directory=registration_directory,
+                output_directory=registration_directory
+                / _SLICE_THICKNESS_OUTPUT_SUBDIRECTORY,
+                ramp_slope_degrees=ramp_slope_degrees,
+                discard_edge_lines=discard_edge_lines,
+                quiet=quiet,
+                inverse_transform_path=inverse_transform_path,
+            )
+        elif method is AnalysisMethod.DISTORTION:
+            _run_distortion(
+                fixed_image_path=fixed_image_path,
+                moving_image_path=moving_image_path,
+                registration_directory=registration_directory,
+                output_directory=registration_directory
+                / _DISTORTION_OUTPUT_SUBDIRECTORY,
+                quiet=quiet,
+                inverse_transform_path=inverse_transform_path,
+            )
 
 
 def _build_checkerboard_slice_indices(*, fixed_image_path: Path) -> list[int]:
@@ -566,7 +709,7 @@ def _run_vial_segmentation_accuracy_analysis(
 
 
 @app.command()
-def register(  # noqa: PLR0913, PLR0912, C901
+def register(  # noqa: PLR0913
     fixed_image: Annotated[
         Path,
         typer.Argument(help="Path to the fixed (scanner) image."),
@@ -590,10 +733,14 @@ def register(  # noqa: PLR0913, PLR0912, C901
         ),
     ] = None,
     analyse: Annotated[
-        AnalysisMethod | None,
+        list[AnalysisMethod] | None,
         typer.Option(
             "--analyse",
-            help="Optionally run an analysis immediately after registration.",
+            help=(
+                "Optionally run one or more analyses immediately after "
+                "registration. Repeat the flag to select multiple methods "
+                "(for example `--analyse slice-thickness --analyse distortion`)."
+            ),
         ),
     ] = None,
     erosion_voxels: Annotated[
@@ -661,7 +808,8 @@ def register(  # noqa: PLR0913, PLR0912, C901
         moving_image: Path to the moving (atlas) image. Uses a downloaded,
             cached SPIRIT atlas by default.
         output_directory: Directory for registration outputs.
-        analyse: Optional analysis method to run after registration.
+        analyse: Optional analysis methods to run after registration. Repeat
+            ``--analyse`` to select more than one.
         erosion_voxels: Erosion voxels for vial measurement analysis.
         ramp_slope_degrees: Wedge angle for slice-thickness analysis.
         discard_edge_lines: Edge lines dropped for slice-thickness analysis.
@@ -678,7 +826,8 @@ def register(  # noqa: PLR0913, PLR0912, C901
     if verbose:
         _configure_verbose_logging()
 
-    if analyse == AnalysisMethod.SLICE_THICKNESS:
+    selected_analyses = _unique_analyses(analyse or ())
+    if AnalysisMethod.SLICE_THICKNESS in selected_analyses:
         # Fail fast before spending minutes on registration.
         _validate_slice_thickness_options(
             ramp_slope_degrees=ramp_slope_degrees,
@@ -755,36 +904,17 @@ def register(  # noqa: PLR0913, PLR0912, C901
             transformed_component_atlas_image_path=registration_result.transformed_component_atlas_path,
         )
 
-    if analyse == AnalysisMethod.VIAL_MEASUREMENTS:
-        _emit_cli_message("Running analysis: vial-measurements", quiet=quiet)
-        _run_vial_measurements(
-            transformed_component_atlas_image_path=registration_result.transformed_component_atlas_path,
-            mri_scan_image_path=fixed_image,
-            erosion_voxels=erosion_voxels,
-            output_directory=resolved_output_directory,
-            save_results=True,
-        )
-    elif analyse == AnalysisMethod.SLICE_THICKNESS:
-        _emit_cli_message("Running analysis: slice-thickness", quiet=quiet)
-        _run_slice_thickness(
-            fixed_image_path=fixed_image,
-            moving_image_path=resolved_moving_image,
-            registration_directory=resolved_output_directory,
-            output_directory=resolved_output_directory
-            / _SLICE_THICKNESS_OUTPUT_SUBDIRECTORY,
-            ramp_slope_degrees=ramp_slope_degrees,
-            discard_edge_lines=discard_edge_lines,
-            quiet=quiet,
-        )
-    elif analyse == AnalysisMethod.DISTORTION:
-        _emit_cli_message("Running analysis: distortion", quiet=quiet)
-        _run_distortion(
-            fixed_image_path=fixed_image,
-            moving_image_path=resolved_moving_image,
-            registration_directory=resolved_output_directory,
-            output_directory=resolved_output_directory / _DISTORTION_OUTPUT_SUBDIRECTORY,
-            quiet=quiet,
-        )
+    _run_selected_analyses(
+        analyses=selected_analyses,
+        fixed_image_path=fixed_image,
+        moving_image_path=resolved_moving_image,
+        registration_directory=resolved_output_directory,
+        transformed_component_atlas_path=registration_result.transformed_component_atlas_path,
+        erosion_voxels=erosion_voxels,
+        ramp_slope_degrees=ramp_slope_degrees,
+        discard_edge_lines=discard_edge_lines,
+        quiet=quiet,
+    )
 
 
 @analyse_app.command("vial-measurements")

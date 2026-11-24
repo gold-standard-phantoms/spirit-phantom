@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING
 from typer.testing import CliRunner
 
 from spirit_phantom import cli
-from spirit_phantom.core import distortion, guarded_registration, registration
+from spirit_phantom.core import (
+    distortion,
+    guarded_registration,
+    registration,
+    slice_thickness_analysis,
+)
 
 if TYPE_CHECKING:
     import pytest
@@ -144,16 +149,27 @@ def test_register_analyse_distortion_runs_after_registration(
     moving_image.write_bytes(b"moving")
     output_directory = tmp_path / "out"
     captured: dict[str, object] = {}
+    inverse_path = output_directory / "Inverse_BSpline_Transform.txt"
 
     def _fake_register(**kwargs: object) -> registration.RegistrationResult:
         resolved = Path(str(kwargs["output_directory"]))
         return _write_registration_outputs(resolved)
 
+    def _fake_ensure_inverse(**kwargs: object) -> Path:
+        path = Path(str(kwargs["registration_directory"])) / (
+            "Inverse_BSpline_Transform.txt"
+        )
+        path.write_text("inverse", encoding="utf-8")
+        return path
+
     def _fake_evaluate(**kwargs: object) -> distortion.DistortionResult:
         captured.update(kwargs)
         return _fake_result()
 
-    monkeypatch.setattr(guarded_registration, "run_registration_isolated", _fake_register)
+    monkeypatch.setattr(
+        guarded_registration, "run_registration_isolated", _fake_register
+    )
+    monkeypatch.setattr(registration, "ensure_inverse_transform", _fake_ensure_inverse)
     monkeypatch.setattr(distortion, "evaluate_scanner_distortion", _fake_evaluate)
 
     result = CliRunner().invoke(
@@ -173,4 +189,85 @@ def test_register_analyse_distortion_runs_after_registration(
     assert result.exit_code == 0, result.output
     assert captured["registration_directory"] == output_directory
     assert captured["output_directory"] == output_directory / "distortion"
+    assert captured["inverse_transform_path"] == inverse_path
     assert captured["cli_user"] is False
+
+
+def test_register_analyse_multiple_ensures_inverse_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Repeated ``--analyse`` should share one inverse and run both analyses."""
+    fixed_image = tmp_path / "fixed.nii.gz"
+    moving_image = tmp_path / "moving.nii.gz"
+    fixed_image.write_bytes(b"fixed")
+    moving_image.write_bytes(b"moving")
+    output_directory = tmp_path / "out"
+    ensure_calls: list[Path] = []
+    thickness_captured: dict[str, object] = {}
+    distortion_captured: dict[str, object] = {}
+
+    def _fake_register(**kwargs: object) -> registration.RegistrationResult:
+        resolved = Path(str(kwargs["output_directory"]))
+        return _write_registration_outputs(resolved)
+
+    def _fake_ensure_inverse(**kwargs: object) -> Path:
+        resolved = Path(str(kwargs["registration_directory"]))
+        ensure_calls.append(resolved)
+        path = resolved / "Inverse_BSpline_Transform.txt"
+        path.write_text("inverse", encoding="utf-8")
+        return path
+
+    def _fake_measure(
+        **kwargs: object,
+    ) -> list[slice_thickness_analysis.WedgeThicknessResult]:
+        thickness_captured.update(kwargs)
+        return [
+            slice_thickness_analysis.WedgeThicknessResult(
+                label=1,
+                thickness_mm=5.0,
+                pixel_size_mm=0.5,
+                n_lines=3,
+                n_samples=64,
+                corners_fixed_mm=(),
+            )
+        ]
+
+    def _fake_evaluate(**kwargs: object) -> distortion.DistortionResult:
+        distortion_captured.update(kwargs)
+        return _fake_result()
+
+    monkeypatch.setattr(
+        guarded_registration, "run_registration_isolated", _fake_register
+    )
+    monkeypatch.setattr(registration, "ensure_inverse_transform", _fake_ensure_inverse)
+    monkeypatch.setattr(
+        slice_thickness_analysis,
+        "measure_slice_thickness_from_fixed_wedges",
+        _fake_measure,
+    )
+    monkeypatch.setattr(distortion, "evaluate_scanner_distortion", _fake_evaluate)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "register",
+            str(fixed_image),
+            str(moving_image),
+            "--output-directory",
+            str(output_directory),
+            "--analyse",
+            "slice-thickness",
+            "--analyse",
+            "distortion",
+            "--quiet",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert ensure_calls == [output_directory]
+    shared_inverse = output_directory / "Inverse_BSpline_Transform.txt"
+    assert thickness_captured["inverse_transform_path"] == shared_inverse
+    assert distortion_captured["inverse_transform_path"] == shared_inverse
+    assert "5.0000" in result.output
+    assert "0.5000" in result.output
