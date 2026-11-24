@@ -12,7 +12,7 @@ uv run spirit-phantom developer --help
 The CLI has three top-level groups:
 
 - `register` — atlas-to-scanner registration
-- `analyse` — product analyses (`vial-measurements`, `slice-thickness`, `map-mask`, `eg-thermometry`)
+- `analyse` — product analyses (`vial-measurements`, `slice-thickness`, `distortion`, `map-mask`, `eg-thermometry`)
 - `developer` — quality-control helpers (`dice`, `vials`); see [Developer tools](developer-tools.md)
 
 The CLI supports both atomic and combined workflows:
@@ -132,8 +132,8 @@ In the combined case, detailed vial statistics are saved automatically to:
 
 `path/to/registration_output/vial_statistics_details.txt`
 
-`--analyse` accepts `vial-measurements` or `slice-thickness`. To register and
-measure slice thickness in one step:
+`--analyse` accepts `vial-measurements`, `slice-thickness`, or `distortion`. To
+register and measure slice thickness in one step:
 
 ```bash
 uv run spirit-phantom register \
@@ -284,3 +284,48 @@ detailed diagnostics (inverse-transform residual, half-maximum crossings,
 slice profiles). See
 [Interpreting outputs](interpreting-outputs.md#slice-thickness) for what each
 file shows and the checks to make before trusting the result.
+
+### `analyse distortion`
+
+Estimate scanner geometric distortion at the packaged SPIRIT fiducials from a
+previous `register` run. The registration directory must contain
+`Rigid_Transform.txt`, `Affine_Transform.txt` and `BSpline_Transform.txt`.
+
+```bash
+uv run spirit-phantom analyse distortion \
+  path/to/registration_output \
+  path/to/scanner_image.nii.gz
+```
+
+Pass the moving (atlas) image as a third argument if registration used a
+non-default atlas. Outputs default to
+`path/to/registration_output/distortion/` (override with `--output-directory`).
+
+The terminal shows numbered stage progress (same inverse-registration banner as
+slice thickness) and aggregate magnitudes:
+
+```text
+[1/4] Inverse registration...
+[1/4] Inverse registration done (36.0s)
+[2/4] Rigid-only transform...
+[2/4] Rigid-only transform done (0.4s)
+[3/4] Affine and B-spline transform...
+[3/4] Affine and B-spline transform done (0.5s)
+[4/4] Writing distortion outputs...
+[4/4] Writing distortion outputs done (0.3s)
+n_fiducials | mean_magnitude_mm | max_magnitude_mm | rms_magnitude_mm | max_nonrigid_roundtrip_residual_mm
+34 | 0.4120 | 1.2030 | 0.5010 | 0.0120
+Distortion outputs: path/to/registration_output/distortion
+```
+
+Method, open doubts, and file-by-file interpretation are in
+[Scanner distortion](scanner-distortion.md) and
+[Interpreting outputs](interpreting-outputs.md#scanner-distortion).
+
+You can also chain it after registration:
+
+```bash
+uv run spirit-phantom register \
+  path/to/scanner_image.nii.gz \
+  --analyse distortion
+```

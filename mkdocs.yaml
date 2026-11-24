@@ -57,6 +57,7 @@ nav:
   - CLI usage: cli.md
   - Python API usage: python-api.md
   - Interpreting outputs: interpreting-outputs.md
+  - Scanner distortion: scanner-distortion.md
   - Example pulse sequences: example-pulse-sequences.md
   - Developer tools: developer-tools.md
   - API reference:
@@ -67,6 +68,7 @@ nav:
       - Guarded registration: api/guarded_registration.md
       - Vials: api/vials.md
       - Slice thickness: api/slice_thickness.md
+      - Scanner distortion: api/distortion.md
       - Atlas mask: api/atlas_mask.md
       - Atlas transfer: api/atlas_transfer.md
       - Multi-echo thermometry: api/multi_echo_thermometry.md
