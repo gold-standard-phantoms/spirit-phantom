@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from spirit_phantom.io.points import (
+    InversionMethod,
     invert_points_through_transformix,
     itk_physical_to_nifti_world,
     load_points,
@@ -114,6 +115,23 @@ def _write_identity_euler_transform(
     transform_path: Path,
 ) -> None:
     """Write an identity Euler TransformParameters file for ``image_path``."""
+    _write_euler_transform(
+        image_path=image_path,
+        transform_path=transform_path,
+        parameters=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+    )
+
+
+def _write_euler_transform(
+    *,
+    image_path: Path,
+    transform_path: Path,
+    parameters: tuple[float, float, float, float, float, float],
+) -> None:
+    """Write an Euler TransformParameters file (rotations rad, translations mm).
+
+    The centre of rotation is the ITK physical origin ``(0, 0, 0)``.
+    """
     itk_image = itk.imread(str(image_path), itk.F)
     origin = [float(value) for value in itk.origin(itk_image)]
     spacing = [float(value) for value in itk.spacing(itk_image)]
@@ -124,7 +142,7 @@ def _write_identity_euler_transform(
     lines = [
         '(Transform "EulerTransform")',
         "(NumberOfParameters 6)",
-        "(TransformParameters 0 0 0 0 0 0)",
+        f"(TransformParameters {' '.join(str(value) for value in parameters)})",
         '(InitialTransformParametersFileName "NoInitialTransform")',
         '(HowToCombineTransforms "Compose")',
         "(FixedImageDimension 3)",
@@ -182,7 +200,11 @@ def test_transformix_identity_preserves_nifti_world_points(tmp_path: Path) -> No
     )
 
 
-def test_invert_identity_preserves_nifti_world_points(tmp_path: Path) -> None:
+@pytest.mark.parametrize("method", list(InversionMethod))
+def test_invert_identity_preserves_nifti_world_points(
+    tmp_path: Path,
+    method: InversionMethod,
+) -> None:
     """Moving→fixed inversion through identity must keep nibabel world points."""
     data = np.zeros((16, 16, 12), dtype=np.float32)
     affine = np.eye(4)
@@ -202,8 +224,81 @@ def test_invert_identity_preserves_nifti_world_points(tmp_path: Path) -> None:
     fixed = invert_points_through_transformix(
         moving_points=points,
         transform_parameter_path=transform_path,
+        fixed_image_path=image_path,
         moving_image_path=image_path,
         output_directory=tmp_path / "invert_out",
+        method=method,
     )
     for source, result in zip(points, fixed, strict=True):
         assert result == pytest.approx(source, abs=1e-5)
+    assert (tmp_path / "invert_out" / "fixed_space_points.txt").exists()
+
+
+def _write_centred_image(*, image_path: Path) -> None:
+    """Write a 32 mm cube of 1 mm voxels centred on the world origin."""
+    data = np.zeros((32, 32, 32), dtype=np.float32)
+    affine = np.eye(4)
+    affine[:3, 3] = [-15.5, -15.5, -15.5]
+    nibabel.save(nibabel.Nifti1Image(dataobj=data, affine=affine), str(image_path))
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        (0.0, 0.0, 0.2, 1.5, -2.0, 0.5),
+        (0.0, np.pi, 0.0, 0.0, 0.0, 0.0),
+    ],
+    ids=["small-rotation", "inverted-phantom-flip"],
+)
+def test_elastix_inversion_round_trips_euler_transform(
+    tmp_path: Path,
+    parameters: tuple[float, float, float, float, float, float],
+) -> None:
+    """The elastix inverse must map points back so that ``T(x) ≈ p``."""
+    image_path = tmp_path / "fixed.nii.gz"
+    _write_centred_image(image_path=image_path)
+    transform_path = tmp_path / "TransformParameters.txt"
+    _write_euler_transform(
+        image_path=image_path,
+        transform_path=transform_path,
+        parameters=parameters,
+    )
+
+    points = [[5.0, -3.0, 2.0], [-6.0, 4.0, -1.0], [0.5, 7.0, 3.5]]
+    fixed = invert_points_through_transformix(
+        moving_points=points,
+        transform_parameter_path=transform_path,
+        fixed_image_path=image_path,
+        moving_image_path=image_path,
+        output_directory=tmp_path / "invert_out",
+    )
+    round_trip = transform_points_with_transformix(
+        points=fixed,
+        transform_parameter_path=transform_path,
+        moving_image_path=image_path,
+        output_directory=tmp_path / "round_trip",
+    )
+    for source, result in zip(points, round_trip, strict=True):
+        assert result == pytest.approx(source, abs=0.05)
+
+
+def test_picard_inversion_fails_for_inverted_phantom_flip(tmp_path: Path) -> None:
+    """Picard iteration cannot invert a 180° rotation (not a contraction)."""
+    image_path = tmp_path / "fixed.nii.gz"
+    _write_centred_image(image_path=image_path)
+    transform_path = tmp_path / "TransformParameters.txt"
+    _write_euler_transform(
+        image_path=image_path,
+        transform_path=transform_path,
+        parameters=(0.0, np.pi, 0.0, 0.0, 0.0, 0.0),
+    )
+
+    with pytest.raises(RuntimeError, match="did not converge"):
+        invert_points_through_transformix(
+            moving_points=[[5.0, -3.0, 2.0]],
+            transform_parameter_path=transform_path,
+            fixed_image_path=image_path,
+            moving_image_path=image_path,
+            output_directory=tmp_path / "invert_out",
+            method=InversionMethod.PICARD,
+        )

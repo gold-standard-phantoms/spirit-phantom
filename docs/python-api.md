@@ -195,3 +195,11 @@ fiducial points file instead of an explicit slice list.
 Load and save point sets in elastix/transformix text format with
 `spirit_phantom.io.points.load_points`, `save_points`, and
 `parse_transformix_output`.
+
+`invert_points_through_transformix` maps atlas (moving) points into scan
+(fixed) space. By default it estimates the inverse transform with elastix
+(`DisplacementMagnitudePenalty`, via
+`spirit_phantom.core.registration.compute_inverse_transform`) and applies it
+with transformix. Pass `method=InversionMethod.PICARD` to use per-point
+fixed-point iteration instead; this only converges for small rotations and
+fails for inverted-phantom registrations.

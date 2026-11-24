@@ -50,6 +50,8 @@ package-data = { "spirit_phantom" = [
   "core/configuration/parameters_Rigid.txt",
   "core/configuration/parameters_Affine.txt",
   "core/configuration/parameters_B_Spline.txt",
+  "core/configuration/parameters_Inverse_Affine.txt",
+  "core/configuration/parameters_Inverse_B_Spline.txt",
   "core/configuration/vial-configurations.json",
 ] }
 package-dir = { "" = "src" }
