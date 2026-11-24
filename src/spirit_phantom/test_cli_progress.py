@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from spirit_phantom import cli
 from spirit_phantom.core import guarded_registration, registration
+from spirit_phantom.utils.progress import format_duration
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -17,8 +18,8 @@ if TYPE_CHECKING:
 
 def test_format_duration_seconds_and_minutes() -> None:
     """Duration helper should format short and long intervals clearly."""
-    assert registration._format_duration(seconds=12.34) == "12.3s"
-    assert registration._format_duration(seconds=125.0) == "2m 05s"
+    assert format_duration(seconds=12.34) == "12.3s"
+    assert format_duration(seconds=125.0) == "2m 05s"
 
 
 def test_register_rejects_quiet_and_verbose_together() -> None:

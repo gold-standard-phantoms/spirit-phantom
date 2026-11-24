@@ -132,6 +132,7 @@ def test_analyse_slice_thickness_uses_registration_outputs(
     assert captured["atlas_image_path"] == moving_image
     assert captured["output_directory"] == registration_directory / "slice_thickness"
     assert captured["discard_edge_lines"] == 0
+    assert captured["cli_user"] is True
     assert "5.0000" in result.output
 
 
