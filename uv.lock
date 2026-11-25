@@ -1407,6 +1407,44 @@ wheels = [
 ]
 
 [[package]]
+name = "qmri"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8f/14/224982010aacbdd0410375f8f5ac57382ad3304d0c4948b13694da8a20f6/qmri-0.1.0-py3-none-any.whl", hash = "sha256:b2c8e03efaffb933839d30d63801d21a1119d2dbec54660fd63ebe56147cff64", size = 50782, upload-time = "2026-06-17T10:42:15.316Z" },
+]
+
+[[package]]
+name = "qmri-io"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nibabel" },
+    { name = "qmri" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/95/5b/1b643b2f1309af0b464c61e70dca7311dc26c1d25f86c83e620d480b3f80/qmri_io-0.1.0-py3-none-any.whl", hash = "sha256:f95e377f5e56eb850dae86a96d2060d8a2fedd115ab26b87c00cd3bdd2d31193", size = 9015, upload-time = "2026-06-17T10:42:19.206Z" },
+]
+
+[[package]]
+name = "qmri-pipelines"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "qmri" },
+    { name = "qmri-io" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d6/72/0d077dbcd9804468c28e47cf897fa2765cd15a9db7f783ec108fe0322c83/qmri_pipelines-0.1.0.tar.gz", hash = "sha256:b53ac46fc593b766d726727e267033fec16e79e235eaa1f8a8de232e2fc80fb8", size = 13338, upload-time = "2026-06-18T11:21:46.548Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/16/6a/0ab53c32b058c88ffa0443806731e4c416cab96eb0cb55604f9363c982bc/qmri_pipelines-0.1.0-py3-none-any.whl", hash = "sha256:45991e3b440b5b9f0b7a80724c9b6d02b07b989f2dca1ef4b33e4c0f53efde92", size = 16222, upload-time = "2026-06-18T11:21:45.205Z" },
+]
+
+[[package]]
 name = "requests"
 version = "2.32.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1551,6 +1589,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pooch" },
     { name = "pydantic" },
+    { name = "qmri-pipelines" },
     { name = "typer" },
 ]
 
@@ -1577,6 +1616,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.5" },
     { name = "pooch", specifier = ">=1.8.2" },
     { name = "pydantic", specifier = ">=2.11.9" },
+    { name = "qmri-pipelines", specifier = ">=0.1.0" },
     { name = "typer", specifier = ">=0.24.1" },
 ]
 

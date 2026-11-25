@@ -6,8 +6,8 @@ The registration command defaults to a SPIRIT atlas image downloaded with
 Top-level command groups:
 
 - ``register`` for atlas-to-scanner registration.
-- ``analyse`` for product analyses (vial measurements, map-mask, eg-mask,
-  slice-thickness).
+- ``analyse`` for product analyses (vial measurements, map-mask,
+  eg-thermometry, slice-thickness).
 - ``developer`` for quality-control helpers (dice, vials).
 """
 
@@ -37,10 +37,14 @@ developer_app = typer.Typer(
 app.add_typer(analyse_app, name="analyse")
 app.add_typer(developer_app, name="developer")
 
-# Keep EG-mask CLI defaults local so importing the CLI does not pull
-# multi-echo thermometry (matplotlib/nibabel) until eg-mask runs.
+# Keep EG thermometry CLI defaults local so importing the CLI does not pull
+# multi-echo thermometry (matplotlib/nibabel) until eg-thermometry runs.
 _EG_MASK_MIN_SAD_COUNTS_DEFAULT = 1000.0
 _EG_MASK_DILATION_ITERATIONS_DEFAULT = 1
+# Keep in step with multi_echo_thermometry.DEFAULT_MAGNETIC_FIELD_TESLA.
+# Duplicated here so importing the CLI does not load the thermometry module.
+_EG_THERMOMETRY_FIELD_STRENGTH_TESLA_DEFAULT = 3.0
+_EG_THERMOMETRY_OUTPUT_DIRECTORY_NAME = "eg_thermometry"
 _SLICE_THICKNESS_RAMP_SLOPE_DEGREES_DEFAULT = 15.0
 _SLICE_THICKNESS_DISCARD_EDGE_LINES_DEFAULT = 1
 _SLICE_THICKNESS_OUTPUT_SUBDIRECTORY = "slice_thickness"
@@ -51,6 +55,14 @@ class AnalysisMethod(StrEnum):
 
     VIAL_MEASUREMENTS = "vial-measurements"
     SLICE_THICKNESS = "slice-thickness"
+
+
+class ThermometryMethod(StrEnum):
+    """qmri analysis methods for ethylene glycol thermometry."""
+
+    REGIONWISE = "regionwise"
+    VOXELWISE = "voxelwise"
+    REGIONWISE_BOOTSTRAP = "regionwise_bootstrap"
 
 
 def _configure_verbose_logging() -> None:
@@ -65,6 +77,71 @@ def _configure_verbose_logging() -> None:
     # keep that detail out of the console.
     for handler in logging.getLogger().handlers:
         handler.setLevel(logging.INFO)
+
+
+def _assert_eg_thermometry_files_exist(
+    *,
+    registered_component_atlas: Path,
+    multi_echo_scans: Sequence[Path],
+    echo_times: Sequence[Path],
+) -> None:
+    """Check that thermometry inputs exist and line up one echo-time file per image.
+
+    Args:
+        registered_component_atlas: Registered component atlas path.
+        multi_echo_scans: Multi-echo GRE image paths.
+        echo_times: Echo-time file paths, in the same order as the images.
+
+    Raises:
+        typer.BadParameter: If a file is missing or the counts differ.
+    """
+    if not multi_echo_scans:
+        msg = "At least one multi-echo GRE image is required."
+        raise typer.BadParameter(msg)
+    if len(echo_times) != len(multi_echo_scans):
+        msg = (
+            "Provide one --echo-times file per multi-echo image, in the same order "
+            f"({len(multi_echo_scans)} images, {len(echo_times)} echo-time files)."
+        )
+        raise typer.BadParameter(msg)
+    if not registered_component_atlas.exists():
+        msg = f"Registered component atlas file not found: {registered_component_atlas}"
+        raise typer.BadParameter(msg)
+    for scan in multi_echo_scans:
+        if not scan.exists():
+            msg = f"Multi-echo gradient echo file not found: {scan}"
+            raise typer.BadParameter(msg)
+    for echo_times_file in echo_times:
+        if not echo_times_file.exists():
+            msg = f"Echo-times file not found: {echo_times_file}"
+            raise typer.BadParameter(msg)
+
+
+def _assert_eg_thermometry_values(
+    *,
+    field_strength: float,
+    minimum_sad_counts: float,
+    dilation_iterations: int,
+) -> None:
+    """Check numeric thermometry options before fitting.
+
+    Args:
+        field_strength: Magnetic field strength in tesla.
+        minimum_sad_counts: SAD inclusion threshold in counts.
+        dilation_iterations: Binary dilation iteration count.
+
+    Raises:
+        typer.BadParameter: If an option is outside its allowed range.
+    """
+    if field_strength <= 0.0:
+        msg = "--field-strength must be greater than 0."
+        raise typer.BadParameter(msg)
+    if minimum_sad_counts < 0.0:
+        msg = "--minimum-sad-counts must be greater than or equal to 0."
+        raise typer.BadParameter(msg)
+    if dilation_iterations < 0:
+        msg = "--dilation-iterations must be greater than or equal to 0."
+        raise typer.BadParameter(msg)
 
 
 def _emit_cli_message(message: str, *, quiet: bool) -> None:
@@ -723,27 +800,59 @@ def analyse_map_mask(
     print(f"Saved mapped atlas mask: {saved_path}")
 
 
-@analyse_app.command("eg-mask")
-def analyse_eg_mask(
+@analyse_app.command("eg-thermometry")
+def analyse_eg_thermometry(  # noqa: PLR0913
     registered_component_atlas: Annotated[
         Path,
         typer.Argument(
             help="Path to the registered component atlas labelled segmentation NIfTI image."
         ),
     ],
-    multi_echo_scan: Annotated[
-        Path,
-        typer.Argument(help="Path to the multi-echo gradient echo NIfTI image."),
+    multi_echo_scans: Annotated[
+        list[Path],
+        typer.Argument(
+            help=(
+                "One or more 4D multi-echo GRE NIfTI images. Every series must "
+                "share the first image's spatial shape and affine."
+            )
+        ),
+    ],
+    echo_times: Annotated[
+        list[Path],
+        typer.Option(
+            "--echo-times",
+            help=(
+                "Echo-time text file in seconds, one value per echo. "
+                "Pass once per multi-echo image, in the same order."
+            ),
+        ),
     ],
     *,
-    output_mask_image_path: Annotated[
+    field_strength: Annotated[
+        float,
+        typer.Option(
+            "--field-strength",
+            help=(
+                "Magnetic field strength in tesla. Defaults to 3, the field "
+                "SPIRIT ethylene glycol materials are calibrated at."
+            ),
+        ),
+    ] = _EG_THERMOMETRY_FIELD_STRENGTH_TESLA_DEFAULT,
+    method: Annotated[
+        ThermometryMethod,
+        typer.Option(
+            "--method",
+            help="qmri analysis method. regionwise fits each vial's mean signal.",
+        ),
+    ] = ThermometryMethod.REGIONWISE,
+    output_directory: Annotated[
         Path | None,
         typer.Option(
-            "--output-mask-image-path",
+            "--output-directory",
             "-o",
             help=(
-                "Optional output path for the saved mask NIfTI. Defaults to "
-                "ethylene_glycol_mask_<timestamp>.nii.gz in the multi-echo parent directory."
+                "Directory for the EG mask, temperature map, qmri report, and "
+                "vial table. Defaults to eg_thermometry beside the first GRE image."
             ),
         ),
     ] = None,
@@ -751,7 +860,10 @@ def analyse_eg_mask(
         bool,
         typer.Option(
             "--vis",
-            help="Save a Sum of Absolute Differences diagnostic plot for EG mask filtering.",
+            help=(
+                "Save diagnostic figures: the SAD mask filter and a "
+                "signal-and-fit plot per vial."
+            ),
         ),
     ] = False,
     minimum_sad_counts: Annotated[
@@ -767,59 +879,79 @@ def analyse_eg_mask(
         int,
         typer.Option(
             "--dilation-iterations",
-            help=("Number of binary dilation iterations for the EG mask."),
+            help="Number of binary dilation iterations for the EG mask.",
         ),
     ] = _EG_MASK_DILATION_ITERATIONS_DEFAULT,
 ) -> None:
-    """Create and save an ethylene glycol vial mask NIfTI file.
+    """Estimate ethylene glycol vial temperatures from multi-echo GRE images.
 
     Args:
         registered_component_atlas: Path to the registered component atlas.
-        multi_echo_scan: Path to the multi-echo GRE image.
-        output_mask_image_path: Optional explicit output path for the saved mask.
-        vis: Whether to save a SAD diagnostic visualisation.
+        multi_echo_scans: Multi-echo GRE images that share one spatial grid.
+        echo_times: qmri echo-time files in seconds, one per GRE image.
+        field_strength: Magnetic field strength in tesla.
+        method: qmri region analysis method.
+        output_directory: Directory for thermometry outputs.
+        vis: Whether to save the SAD mask plot and a signal-and-fit figure per vial.
         minimum_sad_counts: Sum of Absolute Differences threshold.
         dilation_iterations: Binary dilation iteration count.
     """
     from spirit_phantom.core.multi_echo_thermometry import (  # noqa: PLC0415
-        coordinate_ethylene_glycol_vial_segmentation,
+        ETHYLENE_GLYCOL_MASK_FILENAME,
+        EchoTrain,
+        coordinate_ethylene_glycol_thermometry,
+        format_ethylene_glycol_temperature_table,
     )
 
-    if not registered_component_atlas.exists():
-        msg = f"Registered component atlas file not found: {registered_component_atlas}"
-        raise typer.BadParameter(msg)
-    if not multi_echo_scan.exists():
-        msg = f"Multi-echo gradient echo file not found: {multi_echo_scan}"
-        raise typer.BadParameter(msg)
-    if minimum_sad_counts < 0.0:
-        msg = "--minimum-sad-counts must be greater than or equal to 0."
-        raise typer.BadParameter(msg)
-    if dilation_iterations < 0:
-        msg = "--dilation-iterations must be greater than or equal to 0."
-        raise typer.BadParameter(msg)
+    _assert_eg_thermometry_files_exist(
+        registered_component_atlas=registered_component_atlas,
+        multi_echo_scans=multi_echo_scans,
+        echo_times=echo_times,
+    )
+    _assert_eg_thermometry_values(
+        field_strength=field_strength,
+        minimum_sad_counts=minimum_sad_counts,
+        dilation_iterations=dilation_iterations,
+    )
 
+    resolved_output_directory = (
+        output_directory
+        if output_directory is not None
+        else multi_echo_scans[0].parent / _EG_THERMOMETRY_OUTPUT_DIRECTORY_NAME
+    )
+    trains = [
+        EchoTrain(image_path=scan, echo_times_file=echo_times_file)
+        for scan, echo_times_file in zip(multi_echo_scans, echo_times, strict=True)
+    ]
     try:
-        saved_path = coordinate_ethylene_glycol_vial_segmentation(
+        result = coordinate_ethylene_glycol_thermometry(
             registered_component_atlas_image_path=registered_component_atlas,
-            multi_echo_gradient_echo_scan_image_path=multi_echo_scan,
-            output_mask_image_path=output_mask_image_path,
+            trains=trains,
+            output_directory=resolved_output_directory,
+            magnetic_field_tesla=field_strength,
+            method=method.value,
             minimum_sad_counts=minimum_sad_counts,
             dilation_iterations=dilation_iterations,
-            generate_sad_visualisation=vis,
+            generate_visualisations=vis,
         )
     except ValueError as error:
         raise typer.BadParameter(str(error)) from error
 
-    print(f"Saved ethylene glycol mask: {saved_path}")
-    if vis:
-        if saved_path.name.endswith(".nii.gz"):
-            mask_stem = saved_path.name[: -len(".nii.gz")]
-        else:
-            mask_stem = saved_path.stem
-        print(
-            "Saved EG mask Sum of Absolute Differences diagnostic plot: "
-            f"{saved_path.parent / f'{mask_stem}_sad_filter_plot.png'}"
-        )
+    mask_path = resolved_output_directory / ETHYLENE_GLYCOL_MASK_FILENAME
+    print(f"Saved ethylene glycol mask: {mask_path}")
+    print(f"Saved temperature map: {result.temperature_map_path}")
+    print(f"Saved thermometry report: {result.report_path}")
+    print(f"Saved temperature measurements: {result.measurements_path}")
+    for visualisation_path in result.visualisation_paths:
+        print(f"Saved visualisation: {visualisation_path}")
+    print(
+        format_ethylene_glycol_temperature_table(
+            vials=result.vials,
+            magnetic_field_tesla=result.magnetic_field_tesla,
+            method=result.method,
+        ),
+        end="",
+    )
 
 
 @analyse_app.command("slice-thickness")

@@ -32,7 +32,7 @@ Typical workflow:
 2. Register the SPIRIT atlas to it (`register`).
 3. Acquire further series (for example multi-echo thermometry) without moving
    the phantom on the couch.
-4. Map atlas labels onto those series (`analyse map-mask` or `analyse eg-mask`).
+4. Map atlas labels onto those series (`analyse map-mask`, or `analyse eg-thermometry` for the ethylene glycol vials).
 
 ## Ethylene glycol thermometry
 
@@ -71,8 +71,54 @@ Shifting the first echo by half the inter-echo spacing interleaves the two echo
 trains and roughly doubles the temporal sampling rate (for example from ~2–3 ms
 to ~1–1.5 ms).
 
-After acquisition, map the ethylene glycol atlas labels onto the multi-echo
-series with `analyse eg-mask` (mask generation only; temperature analysis is
-still in development). Keep the phantom fixed on the couch relative to the
+### Echo-time text files
+
+`analyse eg-thermometry` does not read echo times from the NIfTI. Pass one text
+file per series with `--echo-times`, in the same order as the images. A file
+such as `series_1_te_s.txt` is a single column of echo times in seconds, one
+value per line, with no header. The number of lines must equal the number of
+echoes in that series, which is the length of the NIfTI's last axis.
+
+For an equally spaced train, write each echo out as
+
+$$
+TE_n = (TE + n \cdot \Delta TE) / 1000
+$$
+
+with $TE$ and $\Delta TE$ in milliseconds and $n$ starting at 0. A first echo of
+1.45 ms and a spacing of 1.2 ms begins:
+
+```text
+0.001450
+0.002650
+0.003850
+0.005050
+```
+
+Continue until there is one line for every echo in that image. The second
+acquisition, with the first echo shifted by half of 1.2 ms, is a separate file
+(`series_2_te_s.txt`) starting at 2.10 ms:
+
+```text
+0.002100
+0.003300
+0.004500
+0.005700
+```
+
+```bash
+uv run spirit-phantom analyse eg-thermometry \
+  path/to/registration_output/transformed_component_atlas.nii.gz \
+  path/to/gre_series_1.nii.gz \
+  path/to/gre_series_2.nii.gz \
+  --echo-times path/to/series_1_te_s.txt \
+  --echo-times path/to/series_2_te_s.txt \
+  --output-directory path/to/eg_thermometry
+```
+
+After acquisition, estimate vial temperature with `analyse eg-thermometry`.
+That command maps the ethylene glycol atlas labels onto the multi-echo series,
+SAD-filters them, and fits the echo trains. Keep the phantom fixed on the couch
+relative to the
 [high-resolution registration scan](#high-resolution-scan-for-atlas-registration)
 so that registration can be reused.

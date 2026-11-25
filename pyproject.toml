@@ -24,6 +24,7 @@ dependencies = [
   "pooch>=1.8.2",
   "typer>=0.24.1",
   "nibabel>=5.4.2",
+  "qmri-pipelines>=0.1.0",
 ]
 
 
