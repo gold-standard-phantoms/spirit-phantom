@@ -24,14 +24,14 @@ flowchart LR
   mapped --> analyseCmd
 ```
 
-Skip the transfer step when the clinical image is the registration target: `register` already puts the atlas on that grid and you can analyse immediately (for example `analyse vial-measurements`). Use `analyse map-mask` when the scan of interest is a different grid, such as a multi-echo series. `analyse eg-mask` remains the thermometry precursor (ethylene glycol mask only; no temperature yet).
+Skip the transfer step when the clinical image is the registration target: `register` already puts the atlas on that grid and you can analyse immediately (for example `analyse vial-measurements`). Use `analyse map-mask` when the scan of interest is a different grid, such as a multi-echo series. `analyse eg-thermometry` maps the ethylene glycol vials onto that series and estimates their temperature.
 
 ## What you can do
 
 - Register a scanner image and measure vials — CLI (`register`, `analyse vial-measurements`)
 - Transfer atlas labels onto another scan grid — CLI (`analyse map-mask`)
 - Measure NEMA wedge slice thickness — CLI (`register --analyse slice-thickness`, `analyse slice-thickness`)
-- Thermometry — in development (ethylene glycol mask helpers exist; no temperature analysis yet)
+- Thermometry — ethylene glycol temperature from multi-echo GRE (`analyse eg-thermometry`)
 - Developer QC helpers — CLI (`developer dice`, `developer vials`); see [Developer tools](docs/developer-tools.md)
 
 ## Installation
@@ -48,7 +48,7 @@ uv pip install 'git+https://github.com/gold-standard-phantoms/spirit-phantom'
 The CLI has three top-level groups:
 
 - `register` — atlas-to-scanner registration
-- `analyse` — product analyses (`vial-measurements`, `slice-thickness`, `map-mask`, `eg-mask`)
+- `analyse` — product analyses (`vial-measurements`, `slice-thickness`, `map-mask`, `eg-thermometry`)
 - `developer` — quality-control helpers (`dice`, `vials`); see [Developer tools](docs/developer-tools.md)
 
 List commands and options:
@@ -99,28 +99,19 @@ The terminal prints one thickness per wedge; QC files, profile plots,
 written to `path/to/registration_output/slice_thickness/`. See
 [Slice thickness](#slice-thickness) below for how to read them.
 
-Atomic ethylene glycol mask generation (single-slice multi-echo GRE):
+Estimate ethylene glycol vial temperature from one or more multi-echo GRE series. Echo-time files are in seconds, one value per echo, one file per series:
 
 ```bash
-uv run spirit-phantom analyse eg-mask \
-  path/to/registered_component_atlas.nii.gz \
-  path/to/multiecho_scan.nii.gz \
-  --output-mask-image-path path/to/output_mask.nii.gz \
-  --minimum-sad-counts 1000 \
-  --dilation-iterations 1 \
-  --vis
+uv run spirit-phantom analyse eg-thermometry \
+  path/to/registration_output/transformed_component_atlas.nii.gz \
+  path/to/gre_series_1.nii.gz \
+  path/to/gre_series_2.nii.gz \
+  --echo-times path/to/series_1_te_s.txt \
+  --echo-times path/to/series_2_te_s.txt \
+  --output-directory path/to/eg_thermometry
 ```
 
-If `--output-mask-image-path` is omitted, the output defaults to:
-
-`<parent of multiecho_scan>/ethylene_glycol_mask_<timestamp>.nii.gz`
-
-The `eg-mask` workflow:
-
-- Applies binary dilation to the mapped EG segmentation before filtering.
-- Computes `sum(abs(S[n] - S[n-1]))` across the 4th dimension for each candidate voxel.
-- Rejects voxels with summed absolute difference below the configured threshold.
-- Saves a diagnostic plot next to the mask as `<mask_stem>_sad_filter_plot.png` when `--vis` is enabled.
+`--field-strength` defaults to 3 T. The command maps atlas labels 21 and 22 onto the first series, dilates them, and keeps voxels whose echo train has a large sum of absolute differences. qmri then fits the combined echo trains and writes the temperature map, a JSON report, and `temperature_measurements.txt`. `--vis` also saves the SAD mask plot and a signal-and-fit figure per vial.
 
 Full command reference: [CLI usage](docs/cli.md).
 

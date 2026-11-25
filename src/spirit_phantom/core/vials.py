@@ -150,6 +150,25 @@ def _ordered_vial_configurations() -> list[VialConfiguration]:
     return ordered_configurations
 
 
+def vial_id_for_segment_index(*, segment_index: int) -> str:
+    """Return the vial letter configured for an atlas segment index.
+
+    Args:
+        segment_index: Integer label in the component atlas.
+
+    Returns:
+        Vial identifier, for example ``"U"`` for segment index 21.
+
+    Raises:
+        ValueError: If no configured vial uses ``segment_index``.
+    """
+    for configuration in _ordered_vial_configurations():
+        if int(configuration.segment_index) == segment_index:
+            return configuration.vial_id
+    msg = f"No vial is configured for segment index {segment_index}."
+    raise ValueError(msg)
+
+
 def _validate_contiguous_vial_ids(
     *, ordered_configurations: list[VialConfiguration]
 ) -> None:

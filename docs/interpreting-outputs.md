@@ -1,6 +1,6 @@
 # Interpreting outputs
 
-How to read common quality-control and analysis products from this package. This page will grow as more outputs are documented. It currently covers registration checkerboard images and slice-thickness results.
+How to read common quality-control and analysis products from this package. This page will grow as more outputs are documented. It currently covers registration checkerboard images, slice-thickness results, and ethylene glycol thermometry.
 
 ## Checkerboard images
 
@@ -88,3 +88,57 @@ Warning signs:
 - **Enough samples across the profile.** NEMA requires at least six pixels across the projected FWHM. Check `fwhm_mm / pixel_size_mm` in the summary CSV. With a 15° wedge the projected FWHM is about 3.7 times the slice thickness, so slices thinner than about 1.6 × the in-plane pixel size fall below this requirement. In the example above, 5.19 / 0.998 ≈ 5.2 pixels, which is below.
 - **The reported thickness is quantised.** `thickness_mm` follows the NEMA procedure as implemented in `nema_slice_thickness`: the half-maximum crossings are rounded up to whole samples. The result therefore moves in steps of `pixel_size_mm × tan α`, about 0.27 mm for 1 mm pixels. `fwhm_mm` in the CSVs uses interpolated crossings, so `fwhm_mm × tan α` gives an unrounded estimate for comparison (1.39 mm for wedge 1 in the example, against the reported 1.34 mm).
 - **The corner mapping should be accurate.** `slice_thickness.log` records the inverse-transform round-trip residual, which should be well below a voxel. A warning is printed if it exceeds 0.1 mm.
+
+## Ethylene glycol thermometry
+
+`analyse eg-thermometry` estimates the temperature of the ethylene glycol NMR vials, U and V (atlas labels 21 and 22), from one or more multi-echo GRE series. The command maps those labels onto the first series, keeps voxels whose echo train has a large sum of absolute differences, and fits the combined echoes with qmri. Field strength defaults to 3 T.
+
+### Terminal summary
+
+For example:
+
+```text
+Ethylene glycol thermometry
+Magnetic field: 3 T
+Method: regionwise
+Uncertainties are standard uncertainties (k=1).
+
+vial    segment   temperature_C   uncertainty_C       df_Hz   r_squared  n_voxels
+U            21           14.20            0.28       224.3       0.980        55
+V            22           14.85            0.21       223.5       0.986        54
+```
+
+The same table is written to `temperature_measurements.txt`.
+
+| Column | Meaning |
+| --- | --- |
+| `vial` | Vial letter. U and V are the ethylene glycol vials. |
+| `segment` | Atlas label fitted for that vial (21 and 22). |
+| `temperature_C` | Representative vial temperature in degrees Celsius. |
+| `uncertainty_C` | Standard uncertainty of that temperature, coverage factor k=1. |
+| `df_Hz` | Fitted frequency difference between the ethylene glycol resonances, in hertz. |
+| `r_squared` | Mean coefficient of determination of the fits for that vial. |
+| `n_voxels` | Voxels in the vial after the mask filter. |
+
+`regionwise` fits the mean signal of each vial, so the table is one temperature per vial. `voxelwise` and `regionwise_bootstrap` still report one representative temperature per vial; the per-fit values stay in the qmri JSON report.
+
+### Output files
+
+Files are written to the thermometry output directory (by default `eg_thermometry` beside the first GRE image).
+
+| File | Use it to |
+| --- | --- |
+| `temperature_measurements.txt` | Record the vial temperatures shown in the terminal. |
+| `eg_thermometry_temperature_map.nii.gz` | Read the qmri temperature map, in degrees Celsius, on the first series' grid. |
+| `eg_thermometry_report.json` | Inspect the qmri fit: echo times, parameters, per-fit temperatures and uncertainties. |
+| `ethylene_glycol_mask.nii.gz` | Check which voxels were labelled 21 and 22 and kept by the SAD filter. |
+| `ethylene_glycol_mask_sad_filter_plot.png` | See which echo trains the mask kept. Written with `--vis`. |
+| `vial_U_signal_fit.png`, `vial_V_signal_fit.png` | Compare the measured echoes with the fitted dual-resonance curve. Written with `--vis`. |
+
+### Reading the signal-fit plot
+
+`--vis` writes one figure per vial. The upper panel plots signal against echo time in milliseconds. Each GRE series uses its own marker, and the curve is the dual-resonance model fitted to those samples. The lower panel is the residual of the mean signal minus that curve. A useful fit follows the beat pattern of the echoes, and the residual is small compared with the signal. The title reports the vial temperature and the mean R².
+
+### Reading the SAD filter plot
+
+`--vis` also writes `ethylene_glycol_mask_sad_filter_plot.png`. Green traces are echo trains kept in the mask. Red traces are trains rejected because their sum of absolute differences is below the threshold printed on the figure. If a vial that should be present is missing from the temperature table, this plot shows whether the filter removed it. Lower `--minimum-sad-counts` to keep more voxels, or raise it when background is leaking into the mask.

@@ -12,14 +12,14 @@ uv run spirit-phantom developer --help
 The CLI has three top-level groups:
 
 - `register` — atlas-to-scanner registration
-- `analyse` — product analyses (`vial-measurements`, `slice-thickness`, `map-mask`, `eg-mask`)
+- `analyse` — product analyses (`vial-measurements`, `slice-thickness`, `map-mask`, `eg-thermometry`)
 - `developer` — quality-control helpers (`dice`, `vials`); see [Developer tools](developer-tools.md)
 
 The CLI supports both atomic and combined workflows:
 
 - Register once, then run one or more analysis commands.
 - Register and immediately run vial measurements or slice thickness in one command.
-- Run standalone analysis commands such as atlas label transfer (`map-mask`) and ethylene glycol mask generation (`eg-mask`).
+- Run standalone analysis commands such as atlas label transfer (`map-mask`) and ethylene glycol thermometry (`eg-thermometry`).
 
 ## Registration
 
@@ -192,29 +192,50 @@ Skip this command when the clinical image is already the registration target:
 multi-echo series). The mapping uses nearest-neighbour pull resampling so
 discrete labels are preserved and every target voxel is assigned.
 
-### `analyse eg-mask`
+### `analyse eg-thermometry`
 
-Map ethylene glycol atlas labels onto a multi-echo GRE scan and filter voxels with
-a sum-of-absolute-differences (SAD) threshold. This is the thermometry precursor,
-not the general atlas transfer (`map-mask` above). It does not compute temperature;
-full thermometry analysis is still in development.
+Estimate temperature in the ethylene glycol NMR vials (atlas labels 21 and 22,
+vials U and V). The command maps the registered component atlas onto the first
+multi-echo GRE series, SAD-filters those labels, and fits the series with
+[qmri](https://github.com/gold-standard-phantoms/qmri) multi-echo thermometry.
+
+Every series must share the first image's spatial shape and affine. qmri
+concatenates the echoes onto that one voxel grid and rejects a series that
+differs. Pass one echo-time text file per series, in the same order as the
+images. Each file is echo times in seconds, one value per echo.
+
+`--field-strength` defaults to 3 T, the field SPIRIT ethylene glycol materials
+are calibrated at. The value is passed to qmri directly, so a missing JSON
+sidecar is not an error.
 
 ```bash
-uv run spirit-phantom analyse eg-mask \
-  path/to/registered_component_atlas.nii.gz \
-  path/to/multiecho_scan.nii.gz \
-  --output-mask-image-path path/to/output_mask.nii.gz \
-  --minimum-sad-counts 1000 \
-  --dilation-iterations 1 \
-  --vis
+uv run spirit-phantom analyse eg-thermometry \
+  path/to/registration_output/transformed_component_atlas.nii.gz \
+  path/to/gre_series_1.nii.gz \
+  path/to/gre_series_2.nii.gz \
+  --echo-times path/to/series_1_te_s.txt \
+  --echo-times path/to/series_2_te_s.txt \
+  --output-directory path/to/eg_thermometry
 ```
 
-If `--output-mask-image-path` is omitted, the output defaults to:
+`--method` accepts `regionwise` (default), `voxelwise`, or
+`regionwise_bootstrap`. `--minimum-sad-counts` and `--dilation-iterations`
+control the ethylene glycol mask. `--vis` saves diagnostic figures in the
+output directory:
 
-`<parent of multiecho_scan>/ethylene_glycol_mask_<timestamp>.nii.gz`
+- `ethylene_glycol_mask_sad_filter_plot.png` — Sum of Absolute Differences
+  traces kept and rejected by the mask filter
+- `vial_U_signal_fit.png` and `vial_V_signal_fit.png` — measured echoes for
+  each vial, with a separate marker for each GRE series, the dual-resonance
+  fit, and the residual of the mean signal
 
-When `--vis` is enabled, a diagnostic plot is saved next to the mask as
-`<mask_stem>_sad_filter_plot.png`.
+If `--output-directory` is omitted, outputs are written to `eg_thermometry`
+beside the first GRE image:
+
+- `ethylene_glycol_mask.nii.gz`
+- `eg_thermometry_temperature_map.nii.gz`
+- `eg_thermometry_report.json`
+- `temperature_measurements.txt`
 
 ### `analyse slice-thickness`
 

@@ -24,14 +24,14 @@ flowchart LR
   mapped --> analyseCmd
 ```
 
-Skip the transfer step when the clinical image is the registration target: `register` already puts the atlas on that grid and you can analyse immediately (for example `analyse vial-measurements`). Use `analyse map-mask` when the scan of interest is a different grid, such as a multi-echo series. `analyse eg-mask` remains the thermometry precursor (ethylene glycol mask only; no temperature yet).
+Skip the transfer step when the clinical image is the registration target: `register` already puts the atlas on that grid and you can analyse immediately (for example `analyse vial-measurements`). Use `analyse map-mask` when the scan of interest is a different grid, such as a multi-echo series. `analyse eg-thermometry` maps the ethylene glycol vials onto that series and estimates their temperature.
 
 ## What you can do
 
 - Register a scanner image and measure vials — CLI (`register`, `analyse vial-measurements`)
 - Transfer atlas labels onto another scan grid — CLI (`analyse map-mask`)
 - Measure NEMA wedge slice thickness — CLI (`register --analyse slice-thickness`, `analyse slice-thickness`); see [Interpreting outputs](interpreting-outputs.md#slice-thickness)
-- Thermometry — in development (ethylene glycol mask helpers exist; no temperature analysis yet)
+- Thermometry — ethylene glycol temperature from multi-echo GRE (`analyse eg-thermometry`); see [Interpreting outputs](interpreting-outputs.md#ethylene-glycol-thermometry)
 - Developer QC helpers — CLI (`developer dice`, `developer vials`); see [Developer tools](developer-tools.md)
 
 ## Guides

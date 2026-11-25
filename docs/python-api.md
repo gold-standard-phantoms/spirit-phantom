@@ -165,12 +165,12 @@ For in-memory transfer (no file write), use
 the default keeps all non-zero labels. Nearest-neighbour pull resampling
 preserves discrete labels and fills every target voxel.
 
-## Ethylene glycol mask (thermometry precursor)
+## Ethylene glycol mask
 
 Map EG atlas labels onto a multi-echo GRE scan and apply SAD filtering.
-This is the Python equivalent of `analyse eg-mask`. It uses the same 3-D
-atlas transfer as `map-mask`, but only for ethylene glycol labels, then
-dilates and SAD-filters. It does not compute temperature.
+`analyse eg-thermometry` calls this before the temperature fit. The function
+uses the same 3-D atlas transfer as `map-mask`, but only for ethylene glycol
+labels, then dilates and SAD-filters. It does not compute temperature.
 
 ```python
 from pathlib import Path
@@ -189,6 +189,51 @@ mask_path = coordinate_ethylene_glycol_vial_segmentation(
 )
 print(mask_path)
 ```
+
+## Ethylene glycol thermometry
+
+Estimate temperature in vials U and V (atlas labels 21 and 22). This is the
+Python equivalent of `analyse eg-thermometry`. Supply one qmri echo-time file
+per GRE series, in seconds, one value per echo. The series must share the
+first image's spatial shape and affine, because qmri fits them as one echo
+train on that grid. `magnetic_field_tesla` defaults to 3.
+
+```python
+from pathlib import Path
+
+from spirit_phantom.core.multi_echo_thermometry import (
+    EchoTrain,
+    coordinate_ethylene_glycol_thermometry,
+)
+
+result = coordinate_ethylene_glycol_thermometry(
+    registered_component_atlas_image_path=Path("transformed_component_atlas.nii.gz"),
+    trains=(
+        EchoTrain(
+            image_path=Path("gre_series_1.nii.gz"),
+            echo_times_file=Path("series_1_te_s.txt"),
+        ),
+        EchoTrain(
+            image_path=Path("gre_series_2.nii.gz"),
+            echo_times_file=Path("series_2_te_s.txt"),
+        ),
+    ),
+    output_directory=Path("eg_thermometry"),
+)
+for vial in result.vials:
+    print(
+        f"{vial.vial_id}: {vial.temperature_celsius:.2f} °C "
+        f"(± {vial.temperature_uncertainty_celsius:.2f})"
+    )
+```
+
+`generate_visualisations=True` also writes the SAD mask plot and one
+signal-and-fit figure per vial (`vial_U_signal_fit.png`,
+`vial_V_signal_fit.png`). Each signal figure marks the GRE series separately
+and shows the residual of the mean signal. The paths are on
+`result.visualisation_paths`. See
+[Interpreting outputs](interpreting-outputs.md#ethylene-glycol-thermometry)
+for how to read the table and the figures.
 
 ## Checkerboard visualisation
 

@@ -1,6 +1,6 @@
 # Multi-echo thermometry
 
-Ethylene glycol vial mask generation from a registered component atlas and a
-multi-echo GRE scan. Temperature analysis is not implemented yet.
+Ethylene glycol vial mask generation, and temperature estimation from that mask
+with user-supplied qmri echo-time files.
 
 ::: spirit_phantom.core.multi_echo_thermometry
