@@ -2,6 +2,10 @@
 
 Tools for analysing Gold Standard Phantoms (GSP) SPIRIT phantom data.
 
+!!! note
+
+    As with any QA tool, please validate results against your own reference before relying on them.
+
 Typical use is a three-stage pipeline: register the SPIRIT atlas to a high-resolution phantom scan, transfer those labels onto a clinical image of interest, then analyse using the atlas in that image's space.
 
 ```mermaid
